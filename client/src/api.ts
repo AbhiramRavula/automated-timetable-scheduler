@@ -97,3 +97,21 @@ export async function deleteBatch(id: string): Promise<any> {
   if (!response.ok) throw new Error("Failed to delete batch");
   return response.json();
 }
+
+export async function deleteTimetable(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/timetables/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete timetable");
+  return response.json();
+}
+
+export async function updateTimetableLabel(id: string, updates: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/timetables/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!response.ok) throw new Error("Failed to update timetable");
+  return response.json();
+}

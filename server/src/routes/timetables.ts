@@ -85,6 +85,36 @@ router.post("/generate", async (req: Request, res: Response) => {
       }
     }
 
+    // Build a teacher lookup: teacherCode → name
+    const teacherLookup: Record<string, string> = {};
+    (teachers || []).forEach((t: any) => {
+      teacherLookup[t.code || t.id || t.name] = t.name;
+    });
+
+    // Inject faculty_mapping and LUNCH slot into each batch
+    for (const batchName of Object.keys(timetablesByBatch)) {
+      const batchObj = timetablesByBatch[batchName];
+
+      // Build faculty_mapping from courses belonging to this batch
+      const batchCourses = (courses || []).filter(
+        (c: any) => (c.batch || "DEFAULT") === batchName
+      );
+      batchObj.faculty_mapping = batchCourses.map((c: any) => ({
+        code: c.code || c.id || c.name,
+        subject: c.name || c.subject || c.code,
+        abbr: c.code || c.id || c.name,
+        faculty: teacherLookup[c.teacherCode] || c.teacherCode || "TBA",
+      }));
+
+      // Add LUNCH slot at index 4 for every day that has at least one event
+      for (const day of Object.keys(batchObj.schedule)) {
+        const row: (string | null)[] = batchObj.schedule[day];
+        if (row.some((v: any) => v !== null)) {
+          row[4] = "LUNCH";
+        }
+      }
+    }
+
     // Convert to array
     const timetables = Object.values(timetablesByBatch);
 
@@ -158,6 +188,29 @@ router.get("/:id/metrics", async (req: Request, res: Response) => {
     return res.json({ metrics: timetable.metrics });
   } catch (error) {
     return res.status(500).json({ error: "Failed to fetch metrics" });
+  }
+});
+
+router.patch("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body; // e.g. { label, grid }
+    const timetable = await Timetable.findByIdAndUpdate(id, updates, { new: true });
+    if (!timetable) return res.status(404).json({ error: "Timetable not found" });
+    return res.json(timetable);
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to update timetable" });
+  }
+});
+
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const deleted = await Timetable.findByIdAndDelete(id);
+    if (!deleted) return res.status(404).json({ error: "Timetable not found" });
+    return res.json({ success: true, id });
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to delete timetable" });
   }
 });
 

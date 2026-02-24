@@ -107,17 +107,15 @@ export function BatchesPage() {
         "V": "VI", "VI": "VII", "VII": "VIII"
       };
 
-      const promotedBatches: Batch[] = batches
+      const promotedBatches: Batch[] = (batches
         .map(b => {
           const currentSem = b.semester || "I";
           if (currentSem === "VIII") return null;
-
           const newSem = semesterMap[currentSem] || currentSem;
           const newName = b.name.replace(/\b(I|II|III|IV|V|VI|VII)\s+SEM\b/, `${newSem} SEM`);
-          
           return { ...b, semester: newSem, name: newName };
-        })
-        .filter((b): b is Batch => b !== null);
+        }) as (Batch | null)[]
+      ).filter((b): b is Batch => b != null);
 
       try {
         await Promise.all(promotedBatches.map(b => {
@@ -317,11 +315,11 @@ export function BatchesPage() {
       {/* Batches Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {batches.map((batch) => (
-          <div
-            key={batch.id}
+        <div
+            key={batch._id || batch.id}
             className="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-blue-500 transition-colors"
           >
-            {editingId === batch.id && editForm ? (
+            {(editingId === (batch._id || batch.id)) && editForm ? (
               // Edit Mode
               <div className="space-y-4">
                 <div>
@@ -364,9 +362,27 @@ export function BatchesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Effective Date
-                  </label>
+                  <label className="block text-xs text-slate-400 mb-1">Semester</label>
+                  <input
+                    type="text"
+                    value={editForm.semester || ""}
+                    onChange={(e) => setEditForm({ ...editForm, semester: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
+                    placeholder="VII"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Year</label>
+                  <input
+                    type="text"
+                    value={editForm.year || ""}
+                    onChange={(e) => setEditForm({ ...editForm, year: parseInt(e.target.value) || undefined })}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
+                    placeholder="2025"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Effective Date</label>
                   <input
                     type="text"
                     value={editForm.effectiveDate}
@@ -442,7 +458,7 @@ export function BatchesPage() {
                       Edit Details
                     </button>
                     <button
-                      onClick={() => handleDelete(batch.id)}
+                      onClick={() => handleDelete(batch._id || batch.id || "")}
                       className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded transition-colors text-sm"
                     >
                       Delete

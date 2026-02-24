@@ -1,203 +1,323 @@
 import { useState, useEffect } from "react";
 import { realMockData } from "../realMockData";
 import { TimetableDisplay } from "../components/TimetableDisplay";
-import { getTimetables } from "../api";
+import { getTimetables, deleteTimetable } from "../api";
 
 const timeSlots = [
-  { name: "Period 1", startTime: "09:40", endTime: "10:40" },
-  { name: "Period 2", startTime: "10:40", endTime: "11:40" },
-  { name: "Period 3", startTime: "11:40", endTime: "12:40" },
-  { name: "Period 4", startTime: "12:40", endTime: "01:40" },
-  { name: "Period 5", startTime: "01:40", endTime: "02:40" },
-  { name: "Period 6", startTime: "02:40", endTime: "03:40" },
-  { name: "Period 7", startTime: "03:40", endTime: "04:40" },
+  { name: "Period 1", startTime: "9.40am",  endTime: "10.40am" },
+  { name: "Period 2", startTime: "10:40am", endTime: "11:40am" },
+  { name: "Period 3", startTime: "11:40am", endTime: "12:40pm" },
+  { name: "Period 4", startTime: "12:40pm", endTime: "1:40pm"  },
+  { name: "LUNCH",   startTime: "1:40pm",   endTime: "2:10pm"  },
+  { name: "Period 6", startTime: "2:10pm",  endTime: "3:10pm"  },
+  { name: "Period 7", startTime: "3:10pm",  endTime: "4:10pm"  },
 ];
 
+/** Build faculty_mapping from doc-level courses + teachers arrays (fallback for older generated docs) */
+function buildFacultyMapping(
+  courses: any[],
+  teachers: any[]
+): { code: string; subject: string; abbr: string; faculty: string }[] {
+  const teacherLookup: Record<string, string> = {};
+  (teachers || []).forEach((t: any) => {
+    teacherLookup[t.code || t.id || t.name] = t.name;
+  });
+  return (courses || []).map((c: any) => ({
+    code: c.code || "",
+    subject: c.name || c.subject || c.code,
+    abbr: c.code || c.id || c.name,
+    faculty: teacherLookup[c.teacherCode] || c.teacherCode || "TBA",
+  }));
+}
+
+/** Normalise a raw MongoDB Timetable document into a flat array of class timetables */
+function normaliseDoc(doc: any): any[] {
+  const grid = doc.grid || {};
+
+  // Seeded format: grid.timetables = [{class, schedule, ...}]
+  if (Array.isArray(grid.timetables) && grid.timetables.length > 0) {
+    return grid.timetables;
+  }
+
+  // Generated format: grid = { batchName: {class, schedule, faculty_mapping?, ...} }
+  const fallbackMapping = buildFacultyMapping(doc.courses || [], doc.teachers || []);
+
+  const fromGrid = (Object.values(grid) as any[]).filter(
+    (v: any) => v && typeof v === "object" && !Array.isArray(v) && v.schedule
+  );
+
+  return fromGrid.map((tt: any) => ({
+    ...tt,
+    // Flatten OCCUPIED placeholders — replace them with empty string so they don't appear as text
+    schedule: Object.fromEntries(
+      Object.entries(tt.schedule || {}).map(([day, cells]) => [
+        day,
+        (cells as any[]).map((c: any) => {
+          if (c === "OCCUPIED") return null;
+          if (c && typeof c === "object") return c.subject ?? null;
+          return c;
+        }),
+      ])
+    ),
+    // Use per-batch faculty_mapping if present, else fall back to doc-level
+    faculty_mapping:
+      Array.isArray(tt.faculty_mapping) && tt.faculty_mapping.length > 0
+        ? tt.faculty_mapping
+        : fallbackMapping,
+    // Normalise field names from generated format → seeded format
+    class: tt.class || tt.name || "Unknown Batch",
+    room_no: tt.room_no || tt.room || "",
+    effective_date: tt.effective_date || tt.wef || tt.date || new Date().toLocaleDateString("en-GB"),
+    class_teacher: tt.class_teacher || tt.classTeacher || "",
+  }));
+}
+
+function getSubjects(facultyMapping: any[]): Record<string, { name: string; faculty: string; code?: string }> {
+  const map: Record<string, { name: string; faculty: string; code?: string }> = {
+    LIB: { name: "Library", faculty: "-" },
+    SPORTS: { name: "Sports", faculty: "-" },
+    CRT: { name: "Critical Reasoning & Thinking", faculty: "Various" },
+    LUNCH: { name: "Lunch Break", faculty: "-" },
+  };
+  (facultyMapping || []).forEach((fm: any) => {
+    if (fm.abbr) {
+      map[fm.abbr] = { name: fm.subject, faculty: fm.faculty, code: fm.code };
+    }
+  });
+  return map;
+}
+
+interface Generation {
+  id: string;
+  label: string;
+  createdAt: string;
+  isSeeded: boolean;
+  timetables: any[];
+  department?: string;
+  academic_year?: string;
+}
+
 export function TimetablesPage() {
-  const [activeTab, setActiveTab] = useState(0);
-  const [timetables, setTimetables] = useState<any[]>([]);
+  const [generations, setGenerations] = useState<Generation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [department, setDepartment] = useState(realMockData.department);
-  const [academicYear, setAcademicYear] = useState(realMockData.academic_year);
+  // per‑generation active batch tab
+  const [activeTabs, setActiveTabs] = useState<Record<string, number>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [labelDraft, setLabelDraft] = useState("");
 
-  useEffect(() => {
-    fetchTimetables();
-  }, []);
+  useEffect(() => { fetchAll(); }, []);
 
-  const fetchTimetables = async () => {
+  const fetchAll = async () => {
     try {
       setLoading(true);
       const data = await getTimetables();
-
       if (data && data.length > 0) {
-        // The latest document from MongoDB — could be seeded or generated
-        const latest = data[0];
-        const grid = latest.grid || {};
-
-        // Seeded data stores timetables in grid.timetables
-        // Generated data stores timetables as grid[batchName] objects
-        const seededArray: any[] = grid.timetables || [];
-        const generatedArray: any[] = Object.values(grid).filter(
-          (v: any) => typeof v === "object" && !Array.isArray(v) && v?.schedule
-        );
-
-        const resolved = seededArray.length > 0 ? seededArray : generatedArray;
-        setTimetables(resolved.length > 0 ? resolved : realMockData.timetables);
-
-        // Use seeded metadata if available
-        if (grid.department) setDepartment(grid.department);
-        if (grid.academic_year) setAcademicYear(grid.academic_year);
+        const gens: Generation[] = data.map((doc: any, idx: number) => {
+          const tts = normaliseDoc(doc);
+          const isSeeded = doc.grid?.source === "seed";
+          return {
+            id: doc._id || String(idx),
+            label: isSeeded ? "📋 Current Department Timetables" : `🤖 AI Generation #${data.length - idx}`,
+            createdAt: doc.createdAt
+              ? new Date(doc.createdAt).toLocaleString("en-IN")
+              : "Date unknown",
+            isSeeded,
+            timetables: tts.length > 0 ? tts : realMockData.timetables,
+            department: doc.grid?.department,
+            academic_year: doc.grid?.academic_year,
+          };
+        });
+        setGenerations(gens);
       } else {
-        setTimetables(realMockData.timetables);
+        // Fallback: show the local mock data as the first generation
+        setGenerations([{
+          id: "local",
+          label: "📋 Current Department Timetables",
+          createdAt: "Loaded from local data",
+          isSeeded: true,
+          timetables: realMockData.timetables,
+          department: realMockData.department,
+          academic_year: realMockData.academic_year,
+        }]);
       }
     } catch (err) {
       console.error("Failed to fetch timetables:", err);
-      setTimetables(realMockData.timetables);
+      setGenerations([{
+        id: "local",
+        label: "📋 Current Department Timetables",
+        createdAt: "Loaded from local data",
+        isSeeded: true,
+        timetables: realMockData.timetables,
+        department: realMockData.department,
+        academic_year: realMockData.academic_year,
+      }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Convert faculty_mapping to subjects format
-  const getSubjects = (facultyMapping: any[]) => {
-    const subjects: any = {};
-    if (!facultyMapping) return subjects;
-    
-    facultyMapping.forEach(fm => {
-      subjects[fm.abbr] = {
-        name: fm.subject,
-        faculty: fm.faculty
-      };
-    });
-    // Add common entries
-    subjects["LIB"] = { name: "Library", faculty: "-" };
-    subjects["SPORTS"] = { name: "Sports", faculty: "-" };
-    subjects["CRT"] = { name: "Critical Thinking", faculty: "Various" };
-    return subjects;
+  const getTab = (genId: string) => activeTabs[genId] ?? 0;
+  const setTab = (genId: string, idx: number) =>
+    setActiveTabs((prev) => ({ ...prev, [genId]: idx }));
+
+  const handleDelete = async (gen: Generation) => {
+    if (!window.confirm(`Delete "${gen.label}"? This cannot be undone.`)) return;
+    // Local-only fallback generations have no real DB id
+    if (gen.id === "local") {
+      setGenerations((prev) => prev.filter((g) => g.id !== gen.id));
+      return;
+    }
+    try {
+      setDeletingId(gen.id);
+      await deleteTimetable(gen.id);
+      setGenerations((prev) => prev.filter((g) => g.id !== gen.id));
+    } catch (err) {
+      alert("Failed to delete. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  const handleExportPDF = () => {
-    window.print();
+  const handleRenameStart = (gen: Generation) => {
+    setEditingLabelId(gen.id);
+    setLabelDraft(gen.label.replace(/^[📋🤖]\s/, ""));
+  };
+
+  const handleRenameSave = (genId: string) => {
+    setGenerations((prev) =>
+      prev.map((g) => (g.id === genId ? { ...g, label: labelDraft } : g))
+    );
+    setEditingLabelId(null);
   };
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 animate-pulse">Fetching latest timetables from cloud...</p>
+        <p className="text-slate-400 animate-pulse">Fetching timetables from cloud...</p>
       </div>
     );
   }
 
-  if (timetables.length === 0) {
+  if (generations.length === 0) {
     return (
       <div className="bg-slate-800 p-12 rounded-xl border border-slate-700 text-center">
-        <h2 className="text-2xl font-bold text-slate-50 mb-4">No Timetables Generated</h2>
-        <p className="text-slate-400 mb-6">Go to the Generate page to create your first set of schedules.</p>
+        <h2 className="text-2xl font-bold text-slate-50 mb-4">No Timetables Yet</h2>
+        <p className="text-slate-400">Go to the Generate page to create your first schedule.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-50 mb-2">Timetables</h1>
-          <p className="text-slate-400">
-            {department} • Academic Year {academicYear}
-          </p>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={handleExportPDF}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
-          >
-            <span>📄</span>
-            Export PDF
-          </button>
+          <h1 className="text-3xl font-bold text-slate-50 mb-1">Timetables</h1>
+          <p className="text-slate-400 text-sm">{generations.length} generation{generations.length !== 1 ? "s" : ""} available</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-        <div className="flex gap-2 overflow-x-auto">
-          {timetables.map((tt, idx) => (
-            <button
-              key={idx}
-              onClick={() => setActiveTab(idx)}
-              className={`px-4 py-2 rounded transition-colors whitespace-nowrap ${
-                activeTab === idx
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-              }`}
-            >
-              {tt.class || tt.name}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* One card per generation — newest first */}
+      {generations.map((gen) => {
+        const activeIdx = getTab(gen.id);
+        const activeTT = gen.timetables[activeIdx];
 
-      {/* Active Timetable */}
-      {timetables[activeTab] ? (
-        <div className="bg-white p-6 rounded-lg">
-          <TimetableDisplay
-            timetable={{
-              id: timetables[activeTab]._id || `tt-${activeTab}`,
-              class: timetables[activeTab].class || timetables[activeTab].name || "Unnamed Batch",
-              room: timetables[activeTab].room_no || timetables[activeTab].room || "",
-              date: new Date().toLocaleDateString("en-GB"),
-              wef: timetables[activeTab].effective_date || timetables[activeTab].effectiveDate || "Date TBD",
-              classTeacher: timetables[activeTab].class_teacher || timetables[activeTab].classTeacher || "TBD",
-              schedule: timetables[activeTab].schedule || {}
-            }}
-            subjects={getSubjects(timetables[activeTab].faculty_mapping || [])}
-            timeSlots={timeSlots}
-            onCellEdit={() => {}}
-          />
-        </div>
-      ) : (
-        <div className="p-12 text-center text-slate-500 bg-slate-800 rounded-xl border border-slate-700">
-          Selected timetable is unavailable.
-        </div>
-      )}
+        return (
+          <div key={gen.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+            {/* Generation header */}
+            <div className={`flex items-center justify-between px-5 py-3 ${gen.isSeeded ? "bg-slate-700" : "bg-blue-900/40"}`}>
+              {/* Label (or rename input) */}
+              <div className="flex flex-col gap-0.5">
+                {editingLabelId === gen.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={labelDraft}
+                      onChange={(e) => setLabelDraft(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleRenameSave(gen.id)}
+                      className="bg-slate-600 border border-blue-400 text-white text-sm rounded px-2 py-0.5 outline-none"
+                    />
+                    <button onClick={() => handleRenameSave(gen.id)} className="text-green-400 text-xs hover:text-green-300">✓ Save</button>
+                    <button onClick={() => setEditingLabelId(null)} className="text-slate-400 text-xs hover:text-slate-300">✕</button>
+                  </div>
+                ) : (
+                  <span className="font-semibold text-slate-100">{gen.label}</span>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">{gen.createdAt}</span>
+                  {gen.department && (
+                    <span className="text-xs text-slate-500">{gen.department} • {gen.academic_year}</span>
+                  )}
+                </div>
+              </div>
+              {/* Action buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleRenameStart(gen)}
+                  title="Rename this generation"
+                  className="px-2.5 py-1.5 bg-slate-600 hover:bg-slate-500 text-white text-xs rounded-lg transition-colors"
+                >
+                  ✏️ Rename
+                </button>
+                <button
+                  onClick={() => handleDelete(gen)}
+                  disabled={deletingId === gen.id}
+                  title="Delete this generation"
+                  className="px-2.5 py-1.5 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
+                >
+                  {deletingId === gen.id ? "Deleting…" : "🗑️ Delete"}
+                </button>
+              </div>
+            </div>
 
-      {/* Summary Stats */}
-      {timetables[activeTab] && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-            <div className="text-sm text-slate-400 mb-1">Total Timetables</div>
-            <div className="text-3xl font-bold text-blue-500">{timetables.length}</div>
-          </div>
-          <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-            <div className="text-sm text-slate-400 mb-1">Working Days</div>
-            <div className="text-3xl font-bold text-green-500">
-              {Object.keys(timetables[activeTab].schedule || {}).length}
+            {/* Batch tabs */}
+            <div className="flex gap-2 overflow-x-auto px-4 py-2 border-b border-slate-700">
+              {gen.timetables.map((tt: any, idx: number) => (
+                <button
+                  key={idx}
+                  onClick={() => setTab(gen.id, idx)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition-colors whitespace-nowrap ${
+                    activeIdx === idx
+                      ? "bg-blue-600 text-white"
+                      : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                  }`}
+                >
+                  {tt.class || tt.name || `Batch ${idx + 1}`}
+                </button>
+              ))}
+            </div>
+
+            {/* Timetable display */}
+            <div className="p-4" id={`gen-${gen.id}`}>
+              {activeTT ? (
+                <TimetableDisplay
+                  timetable={{
+                    id: `${gen.id}-${activeIdx}`,
+                    class: activeTT.class || activeTT.name || "Unknown",
+                    room: activeTT.room_no || activeTT.room || "",
+                    date: new Date().toLocaleDateString("en-GB"),
+                    wef: activeTT.effective_date || activeTT.effectiveDate || "",
+                    classTeacher: activeTT.class_teacher || activeTT.classTeacher || "",
+                    schedule: activeTT.schedule || {},
+                  }}
+                  subjects={getSubjects(activeTT.faculty_mapping || [])}
+                  timeSlots={timeSlots}
+                  onCellEdit={() => {}}
+                />
+              ) : (
+                <p className="text-slate-400 text-center py-8">No timetable data for this batch.</p>
+              )}
             </div>
           </div>
-          <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-            <div className="text-sm text-slate-400 mb-1">Periods per Day</div>
-            <div className="text-3xl font-bold text-purple-500">
-              {timeSlots.length}
-            </div>
-          </div>
-          <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
-            <div className="text-sm text-slate-400 mb-1">Subjects</div>
-            <div className="text-3xl font-bold text-orange-500">
-              {(timetables[activeTab].faculty_mapping || []).length || 
-               Object.values(timetables[activeTab].schedule || {}).flat().filter(e => e && e !== "OCCUPIED").length}
-            </div>
-          </div>
-        </div>
-      )}
+        );
+      })}
 
       <style>{`
         @media print {
-          body {
-            background: white;
-          }
-          .no-print {
-            display: none !important;
-          }
+          body { background: white; }
+          .no-print { display: none !important; }
         }
       `}</style>
     </div>
