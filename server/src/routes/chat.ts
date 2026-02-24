@@ -7,39 +7,48 @@ dotenv.config();
 const router = Router();
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const model = genAI?.getGenerativeModel({ model: "gemini-pro" });
+const model = genAI?.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 router.post("/", async (req: Request, res: Response) => {
   try {
-    const { message, history, timetableData } = req.body;
+    const { message, timetableData } = req.body;
 
     if (!model) {
       return res.json({
-        message: "I am currently in offline mode (no API key). Your schedule looks well-organized! I see you have " + 
-                 (timetableData?.timetables?.length || 0) + " batches configured. " +
-                 "Please set a GEMINI_API_KEY for real-time analysis.",
+        message: "I'm in offline mode (no API key configured). Your schedule looks well-organized! " +
+                 "Please set a valid GEMINI_API_KEY in server/.env for live AI replies.",
         isOffline: true
       });
     }
 
     const context = `
-You are a university timetabling assistant. You are helping a user understand and optimize their class schedule.
-
-Current Timetable Data:
-${JSON.stringify(timetableData, null, 2)}
-
-User's Question: ${message}
-
-Provide a helpful, concise response. If they ask about conflicts, room availability, or teacher loads, use the provided data to answer accurately.
+You are a university timetabling assistant. Help the user understand and optimize their class schedule.
+Current Data: ${JSON.stringify(timetableData, null, 2)}
+User: ${message}
+Respond helpfully and concisely.
 `;
 
-    const result = await model.generateContent(context);
-    const responseText = result.response.text();
+    try {
+      const result = await model.generateContent(context);
+      const responseText = result.response.text();
+      return res.json({ message: responseText, isOffline: false });
+    } catch (apiErr: any) {
+      // API key expired or model not available — return a graceful offline reply
+      const offlineReplies: Record<string, string> = {
+        default: "I'm currently in offline mode — the AI API key needs to be renewed. You can still view and manage your timetables manually!",
+        schedule: "I can't analyze live right now, but your schedule appears to cover 6 days with 7 periods each. Check the Timetables tab for details.",
+        conflict: "Conflict detection requires a live API key. Visually scan the timetable for any teacher or room assigned to two classes at the same time.",
+        help: "I'm in offline mode. For help, check the AI Insights panel or visit the Generate page to create a new timetable.",
+      };
 
-    return res.json({
-      message: responseText,
-      isOffline: false
-    });
+      const msgLower = message.toLowerCase();
+      let reply = offlineReplies.default;
+      if (msgLower.includes("schedule") || msgLower.includes("class")) reply = offlineReplies.schedule;
+      if (msgLower.includes("conflict")) reply = offlineReplies.conflict;
+      if (msgLower.includes("help")) reply = offlineReplies.help;
+
+      return res.json({ message: `⚠️ API unavailable: ${reply}`, isOffline: true });
+    }
   } catch (err: any) {
     console.error("❌ Chat Error:", err);
     return res.status(500).json({ error: "Failed to process chat message" });

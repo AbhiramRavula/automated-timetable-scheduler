@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { extractBatches } from "../realMockData";
+import { useState, useEffect } from "react";
+import { getBatches, createBatch, updateBatch, deleteBatch } from "../api";
 
 interface Batch {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   room: string;
   classTeacher: string;
@@ -12,19 +13,8 @@ interface Batch {
 }
 
 export function BatchesPage() {
-  const [batches, setBatches] = useState<Batch[]>(
-    extractBatches().map((b) => ({
-      ...b,
-      semester: b.name.includes("III SEM")
-        ? "III"
-        : b.name.includes("V SEM")
-          ? "V"
-          : b.name.includes("VII SEM")
-            ? "VII"
-            : "I",
-      year: parseInt(b.name.match(/\d+/)?.[0] || "1"),
-    })),
-  );
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Batch | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -32,16 +22,37 @@ export function BatchesPage() {
   const [previousBatches, setPreviousBatches] = useState<Batch[] | null>(null);
   const [previousSemester, setPreviousSemester] = useState<"Odd" | "Even" | null>(null);
 
+  useEffect(() => {
+    fetchBatches();
+  }, []);
+
+  const fetchBatches = async () => {
+    try {
+      setLoading(true);
+      const data = await getBatches();
+      setBatches(data);
+    } catch (error) {
+      console.error("Failed to fetch batches:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEdit = (batch: Batch) => {
-    setEditingId(batch.id);
+    setEditingId(batch._id || batch.id || null);
     setEditForm({ ...batch });
   };
 
-  const handleSave = () => {
-    if (editForm) {
-      setBatches(batches.map((b) => (b.id === editingId ? editForm : b)));
-      setEditingId(null);
-      setEditForm(null);
+  const handleSave = async () => {
+    if (editForm && editingId) {
+      try {
+        const updated = await updateBatch(editingId, editForm);
+        setBatches(batches.map(b => (b._id === editingId || b.id === editingId) ? updated : b));
+        setEditingId(null);
+        setEditForm(null);
+      } catch (error) {
+        alert("Failed to update batch");
+      }
     }
   };
 
@@ -50,83 +61,116 @@ export function BatchesPage() {
     setEditForm(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this batch?")) {
-      setBatches(batches.filter((b) => b.id !== id));
+      try {
+        await deleteBatch(id);
+        setBatches(batches.filter(b => b._id !== id && b.id !== id));
+      } catch (error) {
+        alert("Failed to delete batch");
+      }
     }
   };
 
   const handleAddNew = () => {
     setIsAdding(true);
     setEditForm({
-      id: `B${batches.length + 1}`,
       name: "",
       room: "",
       classTeacher: "",
       effectiveDate: new Date().toLocaleDateString("en-GB"),
       semester: "I",
-      year: 1,
+      year: 1
     });
   };
 
-  const handleSaveNew = () => {
+  const handleSaveNew = async () => {
     if (editForm && editForm.name.trim()) {
-      setBatches([...batches, editForm]);
-      setIsAdding(false);
-      setEditForm(null);
+      try {
+        const created = await createBatch(editForm);
+        setBatches([...batches, created]);
+        setIsAdding(false);
+        setEditForm(null);
+      } catch (error) {
+        alert("Failed to create batch");
+      }
     }
   };
 
-  const handlePromoteAll = () => {
-    if (
-      confirm(
-        "This will promote all batches to the next semester. Batches in VIII SEM will be graduated (removed). Continue?",
-      )
-    ) {
-      // Store state for undo
+  const handlePromoteAll = async () => {
+    if (confirm("This will promote all batches to the next semester. Batches in VIII SEM will be graduated (removed). Continue?")) {
       setPreviousBatches([...batches]);
       setPreviousSemester(currentSemester);
 
       const semesterMap: { [key: string]: string } = {
-        I: "II",
-        II: "III",
-        III: "IV",
-        IV: "V",
-        V: "VI",
-        VI: "VII",
-        VII: "VIII",
+        "I": "II", "II": "III", "III": "IV", "IV": "V",
+        "V": "VI", "VI": "VII", "VII": "VIII"
       };
 
-      const promotedBatches = batches
-        .map((b) => {
+      const promotedBatches: Batch[] = batches
+        .map(b => {
           const currentSem = b.semester || "I";
-
-          if (currentSem === "VIII") return null; // Graduate
+          if (currentSem === "VIII") return null;
 
           const newSem = semesterMap[currentSem] || currentSem;
-          // Regex to find Roman numerals specifically followed by "SEM"
-          const newName = b.name.replace(
-            /\b(I|II|III|IV|V|VI|VII)\s+SEM\b/,
-            `${newSem} SEM`,
-          );
-
+          const newName = b.name.replace(/\b(I|II|III|IV|V|VI|VII)\s+SEM\b/, `${newSem} SEM`);
+          
           return { ...b, semester: newSem, name: newName };
         })
         .filter((b): b is Batch => b !== null);
 
-      setBatches(promotedBatches);
-      setCurrentSemester(currentSemester === "Odd" ? "Even" : "Odd");
+      try {
+        await Promise.all(promotedBatches.map(b => {
+          const bid = b._id || b.id;
+          if (!bid) return Promise.resolve();
+          return updateBatch(bid, b);
+        }));
+        
+        const graduatedIds = batches
+          .filter(b => b.semester === "VIII")
+          .map(b => b._id || b.id)
+          .filter((id): id is string => typeof id === "string");
+          
+        await Promise.all(graduatedIds.map(id => deleteBatch(id)));
+        
+        setBatches(promotedBatches);
+        setCurrentSemester(currentSemester === "Odd" ? "Even" : "Odd");
+      } catch (error) {
+        alert("Partial failure during promotion. Some batches might not have updated.");
+      }
     }
   };
 
-  const handleUndo = () => {
+  const handleUndo = async () => {
     if (previousBatches && previousSemester) {
-      setBatches(previousBatches);
-      setCurrentSemester(previousSemester);
-      setPreviousBatches(null);
-      setPreviousSemester(null);
+      try {
+        await Promise.all(previousBatches.map(async (b) => {
+          const bid = b._id || b.id;
+          if (bid) {
+             try {
+                await updateBatch(bid, b);
+             } catch {
+                await createBatch(b);
+             }
+          }
+        }));
+        setBatches(previousBatches);
+        setCurrentSemester(previousSemester);
+        setPreviousBatches(null);
+        setPreviousSemester(null);
+      } catch (err) {
+        alert("Failed to undo promotion sync.");
+      }
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

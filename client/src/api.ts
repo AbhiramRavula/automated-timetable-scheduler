@@ -54,3 +54,46 @@ export async function validateTimetable(timetable: any[]): Promise<any> {
 
   return response.json();
 }
+
+export async function getTimetables(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/timetables`);
+  if (!response.ok) throw new Error("Failed to fetch timetables");
+  const data = await response.json();
+  // If the backend returns a single object with internal array, normalize it
+  return Array.isArray(data) ? data : data.timetables || [];
+}
+
+// Batch functions
+export async function getBatches(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/batches`);
+  if (!response.ok) throw new Error("Failed to fetch batches");
+  return response.json();
+}
+
+export async function createBatch(batch: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/batches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(batch),
+  });
+  if (!response.ok) throw new Error("Failed to create batch");
+  return response.json();
+}
+
+export async function updateBatch(id: string, batch: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/batches/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(batch),
+  });
+  if (!response.ok) throw new Error("Failed to update batch");
+  return response.json();
+}
+
+export async function deleteBatch(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/batches/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete batch");
+  return response.json();
+}

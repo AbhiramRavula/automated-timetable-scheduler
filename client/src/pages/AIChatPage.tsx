@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { realMockData } from "../realMockData";
+import { getBatches } from "../api";
 
 interface Message {
   role: "user" | "bot";
@@ -13,6 +13,7 @@ export function AIChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [insights, setInsights] = useState<string[]>([]);
+  const [data, setData] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -24,15 +25,25 @@ export function AIChatPage() {
   }, [messages]);
 
   useEffect(() => {
-    fetchInsights();
+    loadData();
   }, []);
 
-  const fetchInsights = async () => {
+  const loadData = async () => {
+    try {
+      const batches = await getBatches();
+      setData({ batches });
+      fetchInsights({ batches });
+    } catch (err) {
+      console.error("Failed to load data for AI", err);
+    }
+  };
+
+  const fetchInsights = async (timetableData: any) => {
     try {
       const response = await fetch("http://localhost:4000/api/chat/insights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timetableData: realMockData })
+        body: JSON.stringify({ timetableData })
       });
       const data = await response.json();
       setInsights(data.insights);
@@ -55,11 +66,11 @@ export function AIChatPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMessage,
-          timetableData: realMockData
+          timetableData: data
         })
       });
-      const data = await response.json();
-      setMessages(prev => [...prev, { role: "bot", content: data.message }]);
+      const dataRes = await response.json();
+      setMessages(prev => [...prev, { role: "bot", content: dataRes.message }]);
     } catch (err) {
       setMessages(prev => [...prev, { role: "bot", content: "Sorry, I'm having trouble connecting to my brain right now." }]);
     } finally {

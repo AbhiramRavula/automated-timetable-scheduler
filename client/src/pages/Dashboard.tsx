@@ -1,6 +1,6 @@
 import { realMockData, extractFaculty, extractRooms, extractSubjects, extractBatches } from "../realMockData";
 
-export function Dashboard() {
+export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
   const faculty = extractFaculty();
   const rooms = extractRooms();
   const subjects = extractSubjects();
@@ -8,6 +8,8 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* ... existing content ... */}
+      {/* Rest of the file remains similar but buttons call onNavigate */}
       <div>
         <h1 className="text-3xl font-bold text-slate-50 mb-2">Dashboard</h1>
         <p className="text-slate-400">
@@ -79,7 +81,10 @@ export function Dashboard() {
         <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
           <h2 className="text-xl font-bold text-slate-50 mb-4">Quick Actions</h2>
           <div className="space-y-3">
-            <button className="w-full p-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-left transition-colors">
+            <button 
+              onClick={() => onNavigate("timetables")}
+              className="w-full p-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-left transition-colors"
+            >
               <div className="flex items-center">
                 <span className="text-2xl mr-3">📅</span>
                 <div>
@@ -89,7 +94,10 @@ export function Dashboard() {
               </div>
             </button>
 
-            <button className="w-full p-4 bg-green-600 hover:bg-green-700 rounded-lg text-left transition-colors">
+            <button 
+              onClick={() => onNavigate("generate")}
+              className="w-full p-4 bg-green-600 hover:bg-green-700 rounded-lg text-left transition-colors"
+            >
               <div className="flex items-center">
                 <span className="text-2xl mr-3">🔄</span>
                 <div>
@@ -99,22 +107,28 @@ export function Dashboard() {
               </div>
             </button>
 
-            <button className="w-full p-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-left transition-colors">
+            <button 
+              onClick={() => onNavigate("ai-assistant")}
+              className="w-full p-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-left transition-colors"
+            >
               <div className="flex items-center">
                 <span className="text-2xl mr-3">📊</span>
                 <div>
-                  <p className="font-medium">View Reports</p>
-                  <p className="text-sm text-purple-200">Analytics and insights</p>
+                  <p className="font-medium">AI Insights</p>
+                  <p className="text-sm text-purple-200">Analytics and suggestions</p>
                 </div>
               </div>
             </button>
 
-            <button className="w-full p-4 bg-orange-600 hover:bg-orange-700 rounded-lg text-left transition-colors">
+            <button 
+              onClick={() => window.print()}
+              className="w-full p-4 bg-orange-600 hover:bg-orange-700 rounded-lg text-left transition-colors"
+            >
               <div className="flex items-center">
                 <span className="text-2xl mr-3">📄</span>
                 <div>
                   <p className="font-medium">Export Data</p>
-                  <p className="text-sm text-orange-200">Download as PDF or Excel</p>
+                  <p className="text-sm text-orange-200">Download as PDF</p>
                 </div>
               </div>
             </button>

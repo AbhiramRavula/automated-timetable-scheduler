@@ -102,18 +102,25 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
 
   // Get unique subjects from schedule
   const usedSubjects = new Set<string>();
-  Object.values(timetable.schedule).forEach((daySchedule) => {
-    daySchedule.forEach((cell) => {
-      if (cell) {
-        if (typeof cell === "string") {
-          usedSubjects.add(cell);
-        } else {
-          // Handle multi-subject labs
-          cell.subject.split("/").forEach((s) => usedSubjects.add(s.trim()));
-        }
+  if (timetable.schedule) {
+    Object.values(timetable.schedule).forEach((daySchedule) => {
+      if (Array.isArray(daySchedule)) {
+        daySchedule.forEach((cell) => {
+          if (cell) {
+            if (typeof cell === "string") {
+              usedSubjects.add(cell);
+            } else {
+              // Handle multi-subject labs or objects
+              const subjectStr = typeof cell === "object" ? (cell as any).subject : "";
+              if (subjectStr) {
+                subjectStr.split("/").forEach((s: string) => usedSubjects.add(s.trim()));
+              }
+            }
+          }
+        });
       }
     });
-  });
+  }
 
   const subjectList = Array.from(usedSubjects)
     .filter((s) => subjects[s])

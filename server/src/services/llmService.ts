@@ -9,7 +9,7 @@ if (!apiKey) {
 }
 
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const model = genAI?.getGenerativeModel({ model: "gemini-pro" });
+const model = genAI?.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 export interface ParsedConstraint {
   type: "hard" | "soft";

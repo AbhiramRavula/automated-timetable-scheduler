@@ -5,14 +5,16 @@ import { RoomsPage } from "./pages/RoomsPage";
 import { BatchesPage } from "./pages/BatchesPage";
 import { TimetablesPage } from "./pages/TimetablesPage";
 import { AIChatPage } from "./pages/AIChatPage";
+import { GeneratePage } from "./pages/GeneratePage";
 
-type Page = "dashboard" | "faculty" | "rooms" | "batches" | "timetables" | "ai-assistant";
+type Page = "dashboard" | "faculty" | "rooms" | "batches" | "timetables" | "ai-assistant" | "generate";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
 
   const navItems = [
     { id: "dashboard" as Page, label: "Dashboard", icon: "🏠" },
+    { id: "generate" as Page, label: "Generate", icon: "🚀" },
     { id: "ai-assistant" as Page, label: "AI Assistant", icon: "🤖" },
     { id: "timetables" as Page, label: "Timetables", icon: "📅" },
     { id: "batches" as Page, label: "Batches", icon: "🎓" },
@@ -23,7 +25,9 @@ function App() {
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onNavigate={(page: Page) => setCurrentPage(page)} />;
+      case "generate":
+        return <GeneratePage />;
       case "ai-assistant":
         return <AIChatPage />;
       case "faculty":
@@ -35,7 +39,7 @@ function App() {
       case "timetables":
         return <TimetablesPage />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={(page: Page) => setCurrentPage(page)} />;
     }
   };
 

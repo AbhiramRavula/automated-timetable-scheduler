@@ -5,6 +5,15 @@ import { validateAndScore } from "../services/validator";
 
 const router = Router();
 
+router.get("/", async (req: Request, res: Response) => {
+  try {
+    const timetables = await Timetable.find().sort({ createdAt: -1 });
+    res.json(timetables);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to fetch timetables" });
+  }
+});
+
 router.post("/generate", async (req: Request, res: Response) => {
   try {
     const { courses, teachers, rooms, constraintsText, batches, metadata } = req.body;
@@ -79,7 +88,19 @@ router.post("/generate", async (req: Request, res: Response) => {
     // Convert to array
     const timetables = Object.values(timetablesByBatch);
 
-    // TODO: save to Mongo Timetable model here
+    // Persist to MongoDB
+    const persistedTimetable = new Timetable({
+      courses: courses || [],
+      teachers: teachers || [],
+      rooms: rooms || [],
+      grid: timetablesByBatch,
+      constraintsSnapshot: constraints,
+      metrics: result.metrics,
+      metadata: metadata || {}
+    });
+
+    await persistedTimetable.save();
+    console.log("✅ Timetable persisted to MongoDB:", persistedTimetable._id);
 
     return res.json({
       timetable: result.events, // Keep original format for backward compatibility
