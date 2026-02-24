@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+dist/
+
+# Env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Server/Client specific
+server/dist/
+client/dist/
+client/node_modules/
+server/node_modules/

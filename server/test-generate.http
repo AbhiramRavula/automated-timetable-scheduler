@@ -1,0 +1,22 @@
+### Test Generate Timetable
+POST http://localhost:4000/api/timetables/generate
+Content-Type: application/json
+
+{
+  "courses": [
+    { "code": "CS101", "name": "Intro to CS", "durationSlots": 1, "teacherCode": "T1", "batch": "B1" },
+    { "code": "CS102", "name": "Data Structures", "durationSlots": 1, "teacherCode": "T2", "batch": "B1" }
+  ],
+  "teachers": [
+    { "code": "T1", "name": "Dr. Smith" },
+    { "code": "T2", "name": "Dr. Jones" }
+  ],
+  "rooms": [
+    { "name": "R101", "capacity": 40 },
+    { "name": "R102", "capacity": 50 }
+  ],
+  "constraintsText": "No teacher conflicts, no room conflicts, prefer mid-day slots."
+}
+
+### Test Health Check
+GET http://localhost:4000/api/health
