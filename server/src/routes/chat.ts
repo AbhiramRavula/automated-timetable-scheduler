@@ -33,6 +33,14 @@ Respond helpfully and concisely.
       const responseText = result.response.text();
       return res.json({ message: responseText, isOffline: false });
     } catch (apiErr: any) {
+      if (apiErr?.status === 429 || apiErr?.message?.includes("429") || apiErr?.message?.includes("RESOURCE_EXHAUSTED")) {
+        return res.json({ 
+          message: "⚠️ AI Limit Reached: The daily/minute quota for the AI has been exceeded. Please try again later.", 
+          isOffline: true,
+          isLimitReached: true
+        });
+      }
+
       // API key expired or model not available — return a graceful offline reply
       const offlineReplies: Record<string, string> = {
         default: "I'm currently in offline mode — the AI API key needs to be renewed. You can still view and manage your timetables manually!",
@@ -84,7 +92,13 @@ Output ONLY a JSON array of strings.
     const insights = JSON.parse(text.slice(start, end));
 
     return res.json({ insights });
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.status === 429 || err?.message?.includes("429") || err?.message?.includes("RESOURCE_EXHAUSTED")) {
+      return res.json({ 
+        insights: ["⚠️ AI Insight Limit: Unable to analyze further until quota resets."],
+        isLimitReached: true 
+      });
+    }
     return res.json({ 
       insights: ["Unable to generate live insights at this time."] 
     });

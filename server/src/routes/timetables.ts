@@ -25,18 +25,43 @@ router.post("/generate", async (req: Request, res: Response) => {
     console.log("Batches:", batches?.length || 0);
 
     console.log("🤖 Parsing constraints...");
-    const constraints = await parseConstraints(constraintsText || "");
-    console.log("✅ Constraints parsed:", constraints);
+    let constraints: any[] = [];
+    let limitReached = false;
+    
+    try {
+      constraints = await parseConstraints(constraintsText || "");
+      console.log("✅ Constraints parsed:", constraints);
+    } catch (err: any) {
+      if (err.name === "LLMLimitError") {
+        limitReached = true;
+        console.warn("⚠️ AI Limit reached during constraint parsing");
+      } else {
+        throw err;
+      }
+    }
 
     console.log("🤖 Proposing schedule...");
-    const rawSchedule = await proposeSchedule({ 
-      courses, 
-      teachers, 
-      rooms, 
-      constraints,
-      batches 
-    });
-    console.log("✅ Schedule proposed:", rawSchedule.length, "events");
+    let rawSchedule: any[] = [];
+    try {
+      rawSchedule = await proposeSchedule({ 
+        courses, 
+        teachers, 
+        rooms, 
+        constraints,
+        batches 
+      });
+      console.log("✅ Schedule proposed:", rawSchedule.length, "events");
+    } catch (err: any) {
+      if (err.name === "LLMLimitError") {
+        limitReached = true;
+        console.warn("⚠️ AI Limit reached during schedule proposal, using fallback");
+        const { proposeSchedule: fallbackPropose } = require("../services/llmService");
+        // Passing null model context via service to trigger fallback inside service
+        rawSchedule = await fallbackPropose({ courses, teachers, rooms, constraints: [], batches });
+      } else {
+        throw err;
+      }
+    }
 
     console.log("✅ Validating and scoring...");
     const result = validateAndScore(rawSchedule);
@@ -44,16 +69,28 @@ router.post("/generate", async (req: Request, res: Response) => {
     // Group events by batch to create separate timetables
     const timetablesByBatch: { [batch: string]: any } = {};
     
+    // Helper for fuzzy matching codes (strips spaces, case insensitive)
+    const normalize = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const courseMap: Record<string, any> = {};
+    (courses || []).forEach((c: any) => {
+      courseMap[normalize(c.code)] = c;
+    });
+
     for (const event of result.events) {
       const batch = event.batch || "DEFAULT";
+      const dayNames = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+      const dayName = dayNames[event.day];
+      
+      const batchData = (batches || []).find((b: any) => normalize(b.name) === normalize(batch));
+      
       if (!timetablesByBatch[batch]) {
         timetablesByBatch[batch] = {
           id: batch.toLowerCase().replace(/\s+/g, "-"),
           class: batch,
-          room: "",
+          room: batchData?.room || "",
           date: new Date().toLocaleDateString("en-GB"),
-          wef: new Date().toLocaleDateString("en-GB"),
-          classTeacher: "",
+          wef: batchData?.effectiveDate || new Date().toLocaleDateString("en-GB"),
+          classTeacher: batchData?.classTeacher || "",
           schedule: {
             MON: Array(7).fill(null),
             TUE: Array(7).fill(null),
@@ -65,22 +102,25 @@ router.post("/generate", async (req: Request, res: Response) => {
         };
       }
       
-      const dayNames = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
-      const dayName = dayNames[event.day];
-      
+      // Use the original course code from database if possible (fuzzy match)
+      const normalizedCode = normalize(event.courseCode);
+      const matchedCourse = courseMap[normalizedCode];
+      const displayCode = matchedCourse ? matchedCourse.code : event.courseCode;
+
       if (dayName && timetablesByBatch[batch].schedule[dayName]) {
-        // Handle multi-slot events (labs)
+        const eventObj = {
+          subject: displayCode,
+          room: event.roomName,
+          span: event.duration
+        };
+        
+        timetablesByBatch[batch].schedule[dayName][event.slot] = eventObj;
+        
+        // Mark subsequent slots as occupied
         if (event.duration > 1) {
-          timetablesByBatch[batch].schedule[dayName][event.slot] = {
-            subject: event.courseCode,
-            span: event.duration
-          };
-          // Mark subsequent slots as occupied
           for (let i = 1; i < event.duration; i++) {
             timetablesByBatch[batch].schedule[dayName][event.slot + i] = "OCCUPIED";
           }
-        } else {
-          timetablesByBatch[batch].schedule[dayName][event.slot] = event.courseCode;
         }
       }
     }
@@ -95,16 +135,39 @@ router.post("/generate", async (req: Request, res: Response) => {
     for (const batchName of Object.keys(timetablesByBatch)) {
       const batchObj = timetablesByBatch[batchName];
 
-      // Build faculty_mapping from courses belonging to this batch
-      const batchCourses = (courses || []).filter(
-        (c: any) => (c.batch || "DEFAULT") === batchName
-      );
-      batchObj.faculty_mapping = batchCourses.map((c: any) => ({
-        code: c.code || c.id || c.name,
-        subject: c.name || c.subject || c.code,
-        abbr: c.code || c.id || c.name,
-        faculty: teacherLookup[c.teacherCode] || c.teacherCode || "TBA",
-      }));
+      // Build faculty_mapping: include course details for anything scheduled in this batch
+      // This solves the "empty spaces in footer" problem if AI hallucinated codes or assigned wrong batch
+      const scheduledInThisBatch = new Set<string>();
+      Object.values(batchObj.schedule).forEach((row: any) => {
+        row.forEach((slot: any) => {
+          if (slot && typeof slot === 'object') scheduledInThisBatch.add(normalize(slot.subject));
+          else if (slot && slot !== "OCCUPIED" && slot !== "LUNCH") scheduledInThisBatch.add(normalize(slot));
+        });
+      });
+
+      const batchFacultyMapping: any[] = [];
+      scheduledInThisBatch.forEach(normCode => {
+        const c = courseMap[normCode];
+        if (c) {
+          const faculties = c.teacherCodes.map((tc: string) => teacherLookup[tc] || tc).join(", ");
+          batchFacultyMapping.push({
+            code: c.code,
+            subject: c.name || c.subject || c.code,
+            abbr: c.code,
+            faculty: faculties || "TBA",
+          });
+        } else {
+          // If still not found, use a fallback from the code itself
+          batchFacultyMapping.push({
+            code: normCode.toUpperCase(),
+            subject: "Unknown Subject",
+            abbr: normCode.toUpperCase(),
+            faculty: "TBA",
+          });
+        }
+      });
+
+      batchObj.faculty_mapping = batchFacultyMapping;
 
       // Add LUNCH slot at index 4 for every day that has at least one event
       for (const day of Object.keys(batchObj.schedule)) {
@@ -126,22 +189,22 @@ router.post("/generate", async (req: Request, res: Response) => {
       grid: timetablesByBatch,
       constraintsSnapshot: constraints,
       metrics: result.metrics,
-      metadata: metadata || {}
+      metadata: { ...metadata, limitReached }
     });
 
     await persistedTimetable.save();
     console.log("✅ Timetable persisted to MongoDB:", persistedTimetable._id);
 
     return res.json({
-      timetable: result.events, // Keep original format for backward compatibility
-      timetables: timetables,   // New format for AllTimetablesView
+      timetable: result.events, 
+      timetables: timetables,   
       metrics: result.metrics,
       hardViolations: result.hardViolations,
+      limitReached: limitReached
     });
   } catch (err: any) {
     console.error("❌ Error generating timetable:");
     console.error(err.message);
-    console.error(err.stack);
     return res.status(500).json({ 
       error: "Failed to generate timetable",
       details: err.message 

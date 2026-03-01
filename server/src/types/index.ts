@@ -2,11 +2,12 @@
 
 export interface ScheduleEvent {
   courseCode: string;
-  teacherCode: string;
+  teacherCodes: string[];
   roomName: string;
   day: number;
   slot: number;
   duration: number;
+  isProject?: boolean;
 }
 
 export interface ConstraintModel {

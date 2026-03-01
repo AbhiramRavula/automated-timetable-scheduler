@@ -1,42 +1,61 @@
-import { useState } from "react";
-import { extractFaculty } from "../realMockData";
+import { useState, useEffect } from "react";
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty } from "../api";
 
 interface Faculty {
-  id: string;
+  _id?: string;
+  id: string; // for compatibility with older code if needed
   name: string;
+  code: string;
   department: string;
-  designation?: string;
+  designation: string;
   email?: string;
   phone?: string;
 }
 
 export function FacultyPage() {
-  const [faculty, setFaculty] = useState<Faculty[]>(extractFaculty().map(f => ({
-    ...f,
-    designation: "Assistant Professor",
-    email: "",
-    phone: ""
-  })));
+  const [faculty, setFaculty] = useState<Faculty[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Faculty | null>(null);
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const data = await getFaculty();
+      setFaculty(data);
+    } catch (err) {
+      console.error("Failed to load faculty", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredFaculty = faculty.filter(f =>
     f.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    f.department.toLowerCase().includes(searchTerm.toLowerCase())
+    f.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    f.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleEdit = (f: Faculty) => {
-    setEditingId(f.id);
+    setEditingId(f._id!);
     setEditForm({ ...f });
   };
 
-  const handleSave = () => {
-    if (editForm) {
-      setFaculty(faculty.map(f => f.id === editingId ? editForm : f));
-      setEditingId(null);
-      setEditForm(null);
+  const handleSave = async () => {
+    if (editForm && editingId) {
+      try {
+        await updateFaculty(editingId, editForm);
+        setEditingId(null);
+        setEditForm(null);
+        loadData();
+      } catch (err) {
+        alert("Failed to update faculty member");
+      }
     }
   };
 
@@ -48,7 +67,8 @@ export function FacultyPage() {
   const handleAddNew = () => {
     setIsAdding(true);
     setEditForm({
-      id: `F${faculty.length + 1}`,
+      id: "", 
+      code: "",
       name: "",
       department: "Information Technology",
       designation: "Assistant Professor",
@@ -57,40 +77,60 @@ export function FacultyPage() {
     });
   };
 
-  const handleSaveNew = () => {
-    if (editForm && editForm.name.trim()) {
-      setFaculty([...faculty, editForm]);
-      setIsAdding(false);
-      setEditForm(null);
+  const handleSaveNew = async () => {
+    if (editForm && editForm.name.trim() && editForm.code.trim()) {
+      try {
+        await createFaculty(editForm);
+        setIsAdding(false);
+        setEditForm(null);
+        loadData();
+      } catch (err) {
+        alert("Failed to add faculty member");
+      }
+    } else {
+      alert("Name and Code are required");
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this faculty member?")) {
-      setFaculty(faculty.filter(f => f.id !== id));
+      try {
+        await deleteFaculty(id);
+        loadData();
+      } catch (err) {
+        alert("Failed to delete faculty member");
+      }
     }
   };
 
-  const handleBulkImport = () => {
-    const csvInput = prompt("Paste CSV data (Name, Department, Designation, Email, Phone):");
+  const handleBulkImport = async () => {
+    const csvInput = prompt("Paste CSV data (Name, Code, Department, Designation, Email):");
     if (csvInput) {
       const lines = csvInput.split('\n');
-      const newFaculty = lines.map((line, idx) => {
-        const [name, department, designation, email, phone] = line.split(',').map(s => s.trim());
-        return {
-          id: `F${faculty.length + idx + 1}`,
-          name: name || "",
-          department: department || "Information Technology",
-          designation: designation || "Assistant Professor",
-          email: email || "",
-          phone: phone || ""
-        };
-      }).filter(f => f.name);
-      
-      setFaculty([...faculty, ...newFaculty]);
-      alert(`Imported ${newFaculty.length} faculty members`);
+      let successCount = 0;
+      for (const line of lines) {
+        const [name, code, department, designation, email] = line.split(',').map(s => s?.trim());
+        if (name && code) {
+          try {
+            await createFaculty({
+              name,
+              code,
+              department: department || "Information Technology",
+              designation: designation || "Assistant Professor",
+              email: email || "",
+              phone: ""
+            });
+            successCount++;
+          } catch (e) {}
+        }
+      }
+      loadData();
+      alert(`Imported ${successCount} faculty members`);
     }
   };
+
+  if (loading) return <div className="p-8 text-center text-slate-400 font-medium">Loading faculty...</div>;
+
 
   return (
     <div className="space-y-6">
@@ -211,7 +251,7 @@ export function FacultyPage() {
             <thead className="bg-slate-900">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  ID
+                  Code
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Name
@@ -229,12 +269,17 @@ export function FacultyPage() {
             </thead>
             <tbody className="divide-y divide-slate-700">
               {filteredFaculty.map((f) => (
-                <tr key={f.id} className="hover:bg-slate-750 transition-colors">
-                  {editingId === f.id && editForm ? (
+                <tr key={f._id} className="hover:bg-slate-750 transition-colors">
+                  {editingId === f._id && editForm ? (
                     // Edit Mode
                     <>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
-                        {f.id}
+                      <td className="px-6 py-4">
+                        <input
+                          type="text"
+                          value={editForm.code}
+                          onChange={(e) => setEditForm({ ...editForm, code: e.target.value.toUpperCase() })}
+                          className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
+                        />
                       </td>
                       <td className="px-6 py-4">
                         <input
@@ -262,6 +307,7 @@ export function FacultyPage() {
                           <option value="Associate Professor">Associate Professor</option>
                           <option value="Assistant Professor">Assistant Professor</option>
                           <option value="Lecturer">Lecturer</option>
+                          <option value="Lab Assistant">Lab Assistant</option>
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -283,7 +329,7 @@ export function FacultyPage() {
                     // View Mode
                     <>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
-                        {f.id}
+                        {f.code}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-slate-200">{f.name}</div>
@@ -303,7 +349,7 @@ export function FacultyPage() {
                           Edit
                         </button>
                         <button
-                          onClick={() => handleDelete(f.id)}
+                          onClick={() => handleDelete(f._id!)}
                           className="text-red-400 hover:text-red-300"
                         >
                           Delete

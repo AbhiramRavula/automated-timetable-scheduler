@@ -19,6 +19,7 @@ export interface TimetableGenerateResponse {
     softScore: number;
   };
   hardViolations: string[];
+  limitReached?: boolean;
 }
 
 const API_BASE_URL = "http://localhost:4000/api";
@@ -70,6 +71,12 @@ export async function getBatches(): Promise<any[]> {
   return response.json();
 }
 
+export async function getRooms(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/rooms`);
+  if (!response.ok) throw new Error("Failed to fetch rooms");
+  return response.json();
+}
+
 export async function createBatch(batch: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/batches`, {
     method: "POST",
@@ -115,3 +122,101 @@ export async function updateTimetableLabel(id: string, updates: any): Promise<an
   if (!response.ok) throw new Error("Failed to update timetable");
   return response.json();
 }
+
+export async function createRoom(room: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/rooms`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(room),
+  });
+  if (!response.ok) throw new Error("Failed to add room");
+  return response.json();
+}
+
+export async function updateRoom(id: string, room: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/rooms/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(room),
+  });
+  if (!response.ok) throw new Error("Failed to update room");
+  return response.json();
+}
+
+export async function deleteRoom(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/rooms/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete room");
+  return response.json();
+}
+
+// Subject and Faculty CRUD functions
+export async function getSubjects(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/subjects`);
+  if (!response.ok) throw new Error("Failed to fetch subjects");
+  return response.json();
+}
+
+export async function createSubject(subject: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subjects`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subject),
+  });
+  if (!response.ok) throw new Error("Failed to create subject");
+  return response.json();
+}
+
+export async function updateSubject(id: string, subject: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subjects/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(subject),
+  });
+  if (!response.ok) throw new Error("Failed to update subject");
+  return response.json();
+}
+
+export async function deleteSubject(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/subjects/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete subject");
+  return response.json();
+}
+
+export async function getFaculty(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/faculty`);
+  if (!response.ok) throw new Error("Failed to fetch faculty");
+  return response.json();
+}
+
+export async function createFaculty(member: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/faculty`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(member),
+  });
+  if (!response.ok) throw new Error("Failed to add faculty member");
+  return response.json();
+}
+
+export async function updateFaculty(id: string, member: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/faculty/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(member),
+  });
+  if (!response.ok) throw new Error("Failed to update faculty member");
+  return response.json();
+}
+
+export async function deleteFaculty(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/faculty/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete faculty member");
+  return response.json();
+}
+

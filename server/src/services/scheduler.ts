@@ -5,10 +5,11 @@ export interface Course {
   code: string;
   name: string;
   durationSlots: number;
-  teacherCode: string;
+  teacherCodes: string[];
   batch: string;
-  isLab?: boolean;          // NEW: Indicates if this is a lab course
-  requiresSplitting?: boolean; // NEW: If batch needs to be split for labs
+  type?: "lecture" | "lab" | "tutorial" | "project";
+  isLab?: boolean;          
+  requiresSplitting?: boolean; 
 }
 
 export interface Teacher {
@@ -24,12 +25,13 @@ export interface Room {
 
 export interface ScheduleEvent {
   courseCode: string;
-  teacherCode: string;
+  teacherCodes: string[];
   roomName: string;
   batch: string;
   day: number;    // 0-5 (Mon-Sat)
   slot: number;   // 0-6 (7 periods including lunch at slot 4)
   duration: number;
+  isProject?: boolean;
 }
 
 export interface Constraint {
@@ -40,10 +42,12 @@ export interface Constraint {
 
 // Hard constraints that must never be violated
 class HardConstraints {
-  // Check if teacher is already teaching at this time
   static teacherConflict(events: ScheduleEvent[], newEvent: ScheduleEvent): boolean {
+    if (newEvent.isProject) return false; // NEW: Projects don't block teachers
+    
     return events.some(e => 
-      e.teacherCode === newEvent.teacherCode &&
+      !e.isProject && // NEW: Ignore projects in existing schedule
+      e.teacherCodes.some(tc => newEvent.teacherCodes.includes(tc)) &&
       e.day === newEvent.day &&
       this.timeSlotsOverlap(e.slot, e.duration, newEvent.slot, newEvent.duration)
     );
@@ -111,32 +115,6 @@ class SoftConstraints {
 
     return 1 / (1 + totalGaps); // Higher score = fewer gaps
   }
-
-  // Calculate balance score (prefer even distribution across days)
-  static calculateBalanceScore(events: ScheduleEvent[], batch: string): number {
-    const batchEvents = events.filter(e => e.batch === batch);
-    const eventsPerDay = new Array(6).fill(0);
-
-    batchEvents.forEach(e => {
-      eventsPerDay[e.day]++;
-    });
-
-    const avg = batchEvents.length / 6;
-    const variance = eventsPerDay.reduce((sum, count) => 
-      sum + Math.pow(count - avg, 2), 0) / 6;
-
-    return 1 / (1 + variance); // Higher score = more balanced
-  }
-
-  // Prefer morning slots for theory, afternoon for labs
-  static calculateTimePreferenceScore(event: ScheduleEvent): number {
-    const isLab = event.duration > 1;
-    const isMorning = event.slot < 3;
-
-    if (isLab && !isMorning) return 1.0; // Labs in afternoon: good
-    if (!isLab && isMorning) return 1.0; // Theory in morning: good
-    return 0.5; // Not ideal but acceptable
-  }
 }
 
 // N-1 Operator: Move a single event to a different time slot
@@ -178,10 +156,7 @@ class N1Operator {
     const oldGap = SoftConstraints.calculateGapScore(oldSchedule, batch);
     const newGap = SoftConstraints.calculateGapScore(newSchedule, batch);
     
-    const oldBalance = SoftConstraints.calculateBalanceScore(oldSchedule, batch);
-    const newBalance = SoftConstraints.calculateBalanceScore(newSchedule, batch);
-
-    return (newGap + newBalance) > (oldGap + oldBalance);
+    return newGap > oldGap;
   }
 }
 
@@ -232,10 +207,7 @@ class N2Operator {
 
     batches.forEach(batch => {
       oldScore += SoftConstraints.calculateGapScore(oldSchedule, batch);
-      oldScore += SoftConstraints.calculateBalanceScore(oldSchedule, batch);
-      
       newScore += SoftConstraints.calculateGapScore(newSchedule, batch);
-      newScore += SoftConstraints.calculateBalanceScore(newSchedule, batch);
     });
 
     return newScore > oldScore;
@@ -261,52 +233,72 @@ export class TimetableScheduler {
     this.maxIterations = maxIterations;
   }
 
-  // Generate initial feasible solution using greedy approach
+  // Generate initial feasible solution using round-robin approach for variety
   private generateInitialSolution(): ScheduleEvent[] {
     const events: ScheduleEvent[] = [];
     const coursesByBatch = this.groupCoursesByBatch();
 
     for (const [batch, batchCourses] of Object.entries(coursesByBatch)) {
+      // Create a pool of sessions to be scheduled
+      let sessionPool: { course: Course, id: number }[] = [];
+      batchCourses.forEach(course => {
+        // Assume courses have sessionsPerWeek, default to 3 if not specified
+        const sessionsCount = (course as any).sessionsPerWeek || 3;
+        for (let i = 0; i < sessionsCount; i++) {
+          sessionPool.push({ course, id: i });
+        }
+      });
+
+      // Shuffle the pool for variety
+      sessionPool = sessionPool.sort(() => Math.random() - 0.5);
+
       let day = 0;
       let slot = 0;
+      let attempts = 0;
+      const maxAttempts = 1000;
 
-      for (const course of batchCourses) {
-        let placed = false;
+      while (sessionPool.length > 0 && attempts < maxAttempts) {
+        attempts++;
+        const { course } = sessionPool[0];
 
-        // Try to place the course
-        while (!placed && day < 6) {
-          if (slot === 4) { // Skip lunch
-            slot = 5;
+        if (slot === 4) { // Skip lunch
+          slot = 5;
+        }
+
+        const duration = course.type === "lab" ? 2 : course.durationSlots;
+
+        if (slot + duration > 7) {
+          day++;
+          slot = 0;
+          if (day >= 6) { // Wrap around and try again if stuck
+             day = 0;
           }
+          continue;
+        }
 
-          if (slot + course.durationSlots > 7) {
-            day++;
-            slot = 0;
-            continue;
-          }
+        const room = this.selectRoom(course);
+        const newEvent: ScheduleEvent = {
+          courseCode: course.code,
+          teacherCodes: course.teacherCodes,
+          roomName: room.name,
+          batch: batch,
+          day: day,
+          slot: slot,
+          duration: duration,
+          isProject: course.type === "project"
+        };
 
-          const room = this.selectRoom(course);
-          const newEvent: ScheduleEvent = {
-            courseCode: course.code,
-            teacherCode: course.teacherCode,
-            roomName: room.name,
-            batch: batch,
-            day: day,
-            slot: slot,
-            duration: course.durationSlots
-          };
-
-          if (HardConstraints.validate(events, newEvent)) {
-            events.push(newEvent);
-            placed = true;
-            slot += course.durationSlots;
-          } else {
-            slot++;
-          }
-
+        if (HardConstraints.validate(events, newEvent)) {
+          events.push(newEvent);
+          sessionPool.shift(); // Successfully placed
+          slot += duration;
+        } else {
+          // If can't place here, move to next slot or day
+          slot++;
           if (slot >= 7) {
-            day++;
             slot = 0;
+            day++;
+            if (day >= 6) day = 0;
           }
         }
       }
@@ -373,16 +365,10 @@ export class TimetableScheduler {
 
     batches.forEach(batch => {
       const gapScore = SoftConstraints.calculateGapScore(events, batch);
-      const balanceScore = SoftConstraints.calculateBalanceScore(events, batch);
-      totalScore += gapScore + balanceScore;
+      totalScore += gapScore;
     });
 
-    // Add time preference scores
-    events.forEach(event => {
-      totalScore += SoftConstraints.calculateTimePreferenceScore(event);
-    });
-
-    return totalScore / (batches.length * 2 + events.length);
+    return totalScore / (batches.length + events.length);
   }
 
   // Group courses by batch
@@ -402,38 +388,26 @@ export class TimetableScheduler {
 
   // Select appropriate room for course
   private selectRoom(course: Course): Room {
+    // Check if it's a large batch (70 students)
+    const batchCourses = this.courses.filter(c => c.batch === course.batch);
+    const estimatedBatchSize = batchCourses.length > 5 ? 70 : 30; // 70 for main batches
+
     // Lab courses need lab rooms
-    if (course.isLab || course.durationSlots > 1) {
-      // Check if it's a large batch (needs M202)
-      const batchCourses = this.courses.filter(c => c.batch === course.batch);
-      const estimatedBatchSize = batchCourses.length > 10 ? 70 : 60; // Rough estimate
-      
-      if (estimatedBatchSize > 70) {
-        // Need large lab (M202)
-        const largeLab = this.rooms.find(r => 
-          r.name === "M202" || r.type === "large-lab" || r.capacity > 70
-        );
-        if (largeLab) return largeLab;
-      }
-      
-      // Use small labs (N303, N307, N306)
-      const smallLabs = this.rooms.filter(r => 
+    if (course.isLab || course.type === "lab" || course.durationSlots > 1) {
+      const labs = this.rooms.filter(r => 
         r.type === "lab" || 
         r.name.includes("N30") || 
-        (r.capacity >= 25 && r.capacity <= 35)
+        r.capacity >= 25
       );
       
-      if (smallLabs.length > 0) {
-        // Rotate through available small labs
-        const labIndex = Math.floor(Math.random() * smallLabs.length);
-        return smallLabs[labIndex];
+      if (labs.length > 0) {
+        return labs[Math.floor(Math.random() * labs.length)];
       }
     }
     
-    // Regular lecture rooms
+    // Regular lecture rooms (now mostly 70 capacity)
     const lectureRooms = this.rooms.filter(r => 
-      r.type === "lecture" || 
-      (!r.type && r.capacity >= 40)
+      (r.type === "lecture" || !r.type) && r.capacity >= estimatedBatchSize
     );
     
     if (lectureRooms.length > 0) {
@@ -442,6 +416,47 @@ export class TimetableScheduler {
     
     // Fallback: any available room
     return this.rooms[Math.floor(Math.random() * this.rooms.length)];
+  }
+
+  // Fill empty slots with Sports and Library
+  private fillGaps(events: ScheduleEvent[]): ScheduleEvent[] {
+    const finalEvents = [...events];
+    const batches = [...new Set(this.courses.map(c => c.batch || "DEFAULT"))];
+    const roomFallback = this.rooms[0]?.name || "Online";
+
+    for (const batch of batches) {
+      for (let day = 0; day < 6; day++) {
+        for (let slot = 0; slot < 7; slot++) {
+          if (slot === 4) continue; // Skip lunch
+
+          // Check if slot is empty
+          const isBusy = finalEvents.some(e => 
+            e.batch === batch && 
+            e.day === day && 
+            slot >= e.slot && slot < e.slot + e.duration
+          );
+
+          if (!isBusy) {
+            // Fill with Library or Sports
+            // Rules: Sports only in afternoon (slot 5, 6)
+            const canSports = slot > 4;
+            const filler = (canSports && Math.random() < 0.5) ? "SPORTS" : "LIB";
+            
+            finalEvents.push({
+              courseCode: filler,
+              teacherCodes: ["-"],
+              roomName: filler === "SPORTS" ? "Ground" : (this.rooms.find(r => r.name.toLowerCase().includes("library"))?.name || "Library"),
+              batch: batch,
+              day: day,
+              slot: slot,
+              duration: 1
+            });
+          }
+        }
+      }
+    }
+
+    return finalEvents;
   }
 
   // Main scheduling method
@@ -460,9 +475,13 @@ export class TimetableScheduler {
     console.log("\n🔧 Step 2: Optimizing schedule...");
     const optimizedSchedule = this.optimizeSchedule(initialSchedule);
 
+    // Step 2.5: Fill gaps with Sports and Library
+    console.log("\n🏃 Step 2.5: Filling gaps with Sports and Library...");
+    const filledSchedule = this.fillGaps(optimizedSchedule);
+
     // Step 3: Validate final schedule
     console.log("\n✔️ Step 3: Validating final schedule...");
-    const violations = this.validateSchedule(optimizedSchedule);
+    const violations = this.validateSchedule(filledSchedule);
     
     if (violations.length === 0) {
       console.log("✅ No hard constraint violations!");
@@ -471,7 +490,7 @@ export class TimetableScheduler {
       violations.forEach(v => console.log(`  - ${v}`));
     }
 
-    return optimizedSchedule;
+    return filledSchedule;
   }
 
   // Validate entire schedule for hard constraints
@@ -483,7 +502,7 @@ export class TimetableScheduler {
       const otherEvents = events.filter((_, idx) => idx !== i);
 
       if (HardConstraints.teacherConflict(otherEvents, event)) {
-        violations.push(`Teacher conflict: ${event.teacherCode} at day ${event.day}, slot ${event.slot}`);
+        violations.push(`Teacher conflict: ${event.teacherCodes.join(', ')} at day ${event.day}, slot ${event.slot}`);
       }
 
       if (HardConstraints.roomConflict(otherEvents, event)) {

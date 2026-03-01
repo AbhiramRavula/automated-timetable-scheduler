@@ -1,41 +1,58 @@
-import { useState } from "react";
-import { extractRooms } from "../realMockData";
+import { useState, useEffect } from "react";
+import { getRooms, createRoom, updateRoom, deleteRoom } from "../api";
 
 interface Room {
+  _id?: string;
   name: string;
   capacity: number;
-  type: "Lecture Hall" | "Lab" | "Seminar Hall";
+  type: "lecture" | "lab" | "seminar";
   building?: string;
   floor?: string;
   facilities?: string[];
 }
 
 export function RoomsPage() {
-  const [rooms, setRooms] = useState<Room[]>(extractRooms().map(r => ({
-    ...r,
-    building: "Main Block",
-    floor: "3rd Floor",
-    facilities: ["Projector", "Whiteboard"]
-  })));
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
-  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Room | null>(null);
 
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const data = await getRooms();
+      setRooms(data);
+    } catch (err) {
+      console.error("Failed to load rooms", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleEdit = (room: Room) => {
-    setEditingName(room.name);
+    setEditingId(room._id!);
     setEditForm({ ...room });
   };
 
-  const handleSave = () => {
-    if (editForm && editingName) {
-      setRooms(rooms.map(r => r.name === editingName ? editForm : r));
-      setEditingName(null);
-      setEditForm(null);
+  const handleSave = async () => {
+    if (editForm && editingId) {
+      try {
+        await updateRoom(editingId, editForm);
+        setEditingId(null);
+        setEditForm(null);
+        loadData();
+      } catch (err) {
+        alert("Failed to update room");
+      }
     }
   };
 
   const handleCancel = () => {
-    setEditingName(null);
+    setEditingId(null);
     setEditForm(null);
   };
 
@@ -44,26 +61,39 @@ export function RoomsPage() {
     setEditForm({
       name: "",
       capacity: 60,
-      type: "Lecture Hall",
+      type: "lecture",
       building: "Main Block",
       floor: "3rd Floor",
       facilities: []
     });
   };
 
-  const handleSaveNew = () => {
+  const handleSaveNew = async () => {
     if (editForm && editForm.name.trim()) {
-      setRooms([...rooms, editForm]);
-      setIsAdding(false);
-      setEditForm(null);
+      try {
+        await createRoom(editForm);
+        setIsAdding(false);
+        setEditForm(null);
+        loadData();
+      } catch (err) {
+        alert("Failed to create room");
+      }
     }
   };
 
-  const handleDelete = (name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete room ${name}?`)) {
-      setRooms(rooms.filter(r => r.name !== name));
+      try {
+        await deleteRoom(id);
+        loadData();
+      } catch (err) {
+        alert("Failed to delete room");
+      }
     }
   };
+
+  if (loading) return <div className="p-8 text-center text-slate-400 font-medium">Loading rooms...</div>;
+
 
   return (
     <div className="space-y-6">
@@ -158,8 +188,8 @@ export function RoomsPage() {
       {/* Rooms Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {rooms.map((room) => (
-          <div key={room.name} className="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-blue-500 transition-colors">
-            {editingName === room.name && editForm ? (
+          <div key={room._id} className="bg-slate-800 p-6 rounded-lg border border-slate-700 hover:border-blue-500 transition-colors">
+            {editingId === room._id && editForm ? (
               // Edit Mode
               <div className="space-y-3">
                 <div>
@@ -187,9 +217,9 @@ export function RoomsPage() {
                     onChange={(e) => setEditForm({ ...editForm, type: e.target.value as any })}
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
                   >
-                    <option value="Lecture Hall">Lecture Hall</option>
-                    <option value="Lab">Lab</option>
-                    <option value="Seminar Hall">Seminar Hall</option>
+                    <option value="lecture">Lecture Hall</option>
+                    <option value="lab">Lab</option>
+                    <option value="seminar">Seminar Hall</option>
                   </select>
                 </div>
                 <div className="flex gap-2">
@@ -216,7 +246,7 @@ export function RoomsPage() {
                     <p className="text-sm text-slate-400">{room.type}</p>
                   </div>
                   <button
-                    onClick={() => handleDelete(room.name)}
+                    onClick={() => handleDelete(room._id!, room.name)}
                     className="text-red-400 hover:text-red-300 text-sm"
                   >
                     ✕
@@ -279,7 +309,7 @@ export function RoomsPage() {
           <div>
             <p className="text-sm text-slate-400">Lecture Halls</p>
             <p className="text-2xl font-bold text-orange-400">
-              {rooms.filter(r => r.type === "Lecture Hall").length}
+              {rooms.filter(r => r.type === "lecture").length}
             </p>
           </div>
         </div>

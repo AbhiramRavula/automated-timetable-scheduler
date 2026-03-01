@@ -70,23 +70,34 @@ function CellEdit({ value, onChange }: { value: string; onChange: (v: string) =>
 }
 
 /** Merge consecutive identical cells in a day row → returns [{value, span}] */
-function mergeRow(cells: (string | null)[]): { value: string; span: number; index: number }[] {
-  const merged: { value: string; span: number; index: number }[] = [];
+function mergeRow(cells: (any | null)[]): { value: any; span: number; index: number }[] {
+  const merged: { value: any; span: number; index: number }[] = [];
   let i = 0;
   while (i < cells.length) {
-    const val = cells[i] ?? "";
-    // skip LUNCH slot (index 4) — handled separately
+    const cell = cells[i];
+    
+    // Skip LUNCH handled separately (index 4)
     if (i === 4) { i++; continue; }
-    let span = 1;
-    while (
-      i + span < cells.length &&
-      i + span !== 4 && // don't cross LUNCH
-      (cells[i + span] ?? "") === val &&
-      span < 2 // max merge 2 periods for labs
-    ) {
-      span++;
+    
+    // Skip OCCUPIED slots — they were handled by the preceding cell's span
+    if (cell === "OCCUPIED") { i++; continue; }
+
+    const val = typeof cell === "string" ? cell : (cell?.subject ?? "");
+    let span = (typeof cell === "object" && cell?.span) ? cell.span : 1;
+    
+    // If no backend span, check for manual merging (backward compatibility or user edits)
+    if (span === 1 && val !== "") {
+      while (
+        i + span < cells.length &&
+        i + span !== 4 &&
+        (typeof cells[i + span] === "string" ? cells[i + span] : cells[i + span]?.subject ?? "") === val &&
+        span < 2
+      ) {
+        span++;
+      }
     }
-    merged.push({ value: val, span, index: i });
+    
+    merged.push({ value: cell, span, index: i });
     i += span;
   }
   return merged;
@@ -97,11 +108,11 @@ const DAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
 export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }: TimetableProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
-  const [schedule, setSchedule] = useState<Record<string, (string | null)[]>>(() => {
-    const flat: Record<string, (string | null)[]> = {};
+  const [schedule, setSchedule] = useState<Record<string, (any | null)[]>>(() => {
+    const flat: Record<string, (any | null)[]> = {};
     Object.entries(timetable.schedule || {}).forEach(([day, cells]) => {
       flat[day] = (cells as any[]).map((c) =>
-        c == null ? null : typeof c === "string" ? c : (c as any).subject ?? ""
+        c == null ? null : c
       );
     });
     return flat;
@@ -128,15 +139,18 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
   const usedAbbrs = new Set<string>();
   Object.values(schedule).forEach((row) => {
     (row || []).forEach((cell) => {
-      if (!cell || cell === "LUNCH") return;
-      cell.split("/").forEach((part) => {
+      if (!cell || cell === "LUNCH" || cell === "OCCUPIED") return;
+      const cellText = typeof cell === "string" ? cell : (cell.subject ?? "");
+      if (!cellText || cellText === "LUNCH" || cellText === "OCCUPIED") return;
+      
+      cellText.split("/").forEach((part: string) => {
         const abbr = part.trim().split(/\s|\(/)[0];
         if (abbr) usedAbbrs.add(abbr);
       });
     });
   });
   // Remove system words
-  ["LUNCH", "SPORTS", "LIB", "CRT"].forEach((k) => usedAbbrs.delete(k));
+  ["LUNCH", "SPORTS", "LIB", "CRT", "OCCUPIED"].forEach((k) => usedAbbrs.delete(k));
   const legendAbbrs = Array.from(usedAbbrs).filter((a) => subjects[a]).sort();
 
   // ── PDF Export ──────────────────────────────────────────────────────────────
@@ -227,7 +241,15 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
                       className="border-2 border-black px-1 py-1 text-center font-semibold text-xs"
                     >
                       <CellEdit
-                        value={cell.value}
+                        value={
+                          typeof cell.value === "string" 
+                            ? cell.value 
+                            : `${cell.value?.subject || ""}${
+                                (cell.value?.room && cell.value.subject !== "SPORTS" && cell.value.subject !== "LIB") 
+                                  ? ` (${cell.value.room})` 
+                                  : ""
+                              }`
+                        }
                         onChange={(v) => handleCellChange(day, cell.index, v)}
                       />
                     </td>
@@ -250,7 +272,15 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
                       className="border-2 border-black px-1 py-1 text-center font-semibold text-xs"
                     >
                       <CellEdit
-                        value={cell.value}
+                        value={
+                          typeof cell.value === "string" 
+                            ? cell.value 
+                            : `${cell.value?.subject || ""}${
+                                (cell.value?.room && cell.value.subject !== "SPORTS" && cell.value.subject !== "LIB") 
+                                  ? ` (${cell.value.room})` 
+                                  : ""
+                              }`
+                        }
                         onChange={(v) => handleCellChange(day, cell.index, v)}
                       />
                     </td>

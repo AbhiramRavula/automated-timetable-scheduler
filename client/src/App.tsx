@@ -6,8 +6,9 @@ import { BatchesPage } from "./pages/BatchesPage";
 import { TimetablesPage } from "./pages/TimetablesPage";
 import { AIChatPage } from "./pages/AIChatPage";
 import { GeneratePage } from "./pages/GeneratePage";
+import { SubjectsPage } from "./pages/SubjectsPage";
 
-type Page = "dashboard" | "faculty" | "rooms" | "batches" | "timetables" | "ai-assistant" | "generate";
+type Page = "dashboard" | "faculty" | "subjects" | "rooms" | "batches" | "timetables" | "ai-assistant" | "generate";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
@@ -18,6 +19,7 @@ function App() {
     { id: "ai-assistant" as Page, label: "AI Assistant", icon: "🤖" },
     { id: "timetables" as Page, label: "Timetables", icon: "📅" },
     { id: "batches" as Page, label: "Batches", icon: "🎓" },
+    { id: "subjects" as Page, label: "Subjects", icon: "📖" },
     { id: "faculty" as Page, label: "Faculty", icon: "👨‍🏫" },
     { id: "rooms" as Page, label: "Rooms", icon: "🏫" },
   ];
@@ -32,6 +34,8 @@ function App() {
         return <AIChatPage />;
       case "faculty":
         return <FacultyPage />;
+      case "subjects":
+        return <SubjectsPage />;
       case "rooms":
         return <RoomsPage />;
       case "batches":

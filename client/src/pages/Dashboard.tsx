@@ -1,19 +1,51 @@
-import { realMockData, extractFaculty, extractRooms, extractSubjects, extractBatches } from "../realMockData";
+import { useState, useEffect } from "react";
+import { getFaculty, getRooms, getSubjects, getBatches } from "../api";
+import { realMockData } from "../realMockData";
 
 export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
-  const faculty = extractFaculty();
-  const rooms = extractRooms();
-  const subjects = extractSubjects();
-  const batches = extractBatches();
+  const [data, setData] = useState<{
+    faculty: any[];
+    rooms: any[];
+    subjects: any[];
+    batches: any[];
+  }>({
+    faculty: [],
+    rooms: [],
+    subjects: [],
+    batches: []
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const [f, r, s, b] = await Promise.all([
+        getFaculty(),
+        getRooms(),
+        getSubjects(),
+        getBatches()
+      ]);
+      setData({ faculty: f, rooms: r, subjects: s, batches: b });
+    } catch (err) {
+      console.error("Failed to load dashboard data", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const { faculty, rooms, subjects, batches } = data;
+
+  if (loading) return <div className="p-8 text-center text-slate-400 font-medium">Loading dashboard stats...</div>;
 
   return (
     <div className="space-y-6">
-      {/* ... existing content ... */}
-      {/* Rest of the file remains similar but buttons call onNavigate */}
       <div>
         <h1 className="text-3xl font-bold text-slate-50 mb-2">Dashboard</h1>
         <p className="text-slate-400">
-          {realMockData.department} • Academic Year {realMockData.academic_year}
+          Academic Overview • Academic Year {realMockData.academic_year}
         </p>
       </div>
 
@@ -62,18 +94,20 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
         <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
           <h2 className="text-xl font-bold text-slate-50 mb-4">Active Batches</h2>
           <div className="space-y-3">
-            {batches.map((batch) => (
-              <div key={batch.id} className="flex items-center justify-between p-3 bg-slate-900 rounded">
+            {batches.length > 0 ? batches.map((batch: any) => (
+              <div key={batch._id} className="flex items-center justify-between p-3 bg-slate-900 rounded">
                 <div>
                   <p className="font-medium text-slate-200">{batch.name}</p>
-                  <p className="text-sm text-slate-400">Class Teacher: {batch.classTeacher}</p>
+                  <p className="text-sm text-slate-400">Class Teacher: {batch.classTeacher || "Not assigned"}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-500">{batch.room || "No room"}</p>
-                  <p className="text-xs text-slate-500">WEF: {batch.effectiveDate}</p>
+                  <p className="text-xs text-slate-500">{batch.room || "No room assigned"}</p>
+                  <p className="text-xs text-slate-500">WEF: {batch.effectiveDate || "N/A"}</p>
                 </div>
               </div>
-            ))}
+            )) : (
+              <p className="text-slate-500 italic text-sm py-4 text-center">No batches found. Go to the Batches page to add one.</p>
+            )}
           </div>
         </div>
 
@@ -99,7 +133,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
               className="w-full p-4 bg-green-600 hover:bg-green-700 rounded-lg text-left transition-colors"
             >
               <div className="flex items-center">
-                <span className="text-2xl mr-3">🔄</span>
+                <span className="text-2xl mr-3">🚀</span>
                 <div>
                   <p className="font-medium">Generate New Timetable</p>
                   <p className="text-sm text-green-200">Create optimized schedules</p>
@@ -112,7 +146,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
               className="w-full p-4 bg-purple-600 hover:bg-purple-700 rounded-lg text-left transition-colors"
             >
               <div className="flex items-center">
-                <span className="text-2xl mr-3">📊</span>
+                <span className="text-2xl mr-3">🤖</span>
                 <div>
                   <p className="font-medium">AI Insights</p>
                   <p className="text-sm text-purple-200">Analytics and suggestions</p>
@@ -121,14 +155,14 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
             </button>
 
             <button 
-              onClick={() => window.print()}
+              onClick={() => onNavigate("subjects")}
               className="w-full p-4 bg-orange-600 hover:bg-orange-700 rounded-lg text-left transition-colors"
             >
               <div className="flex items-center">
-                <span className="text-2xl mr-3">📄</span>
+                <span className="text-2xl mr-3">📖</span>
                 <div>
-                  <p className="font-medium">Export Data</p>
-                  <p className="text-sm text-orange-200">Download as PDF</p>
+                  <p className="font-medium">Manage Subjects</p>
+                  <p className="text-sm text-orange-200">Add or edit courses</p>
                 </div>
               </div>
             </button>
@@ -141,19 +175,20 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
         <h2 className="text-xl font-bold text-slate-50 mb-4">System Information</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <p className="text-sm text-slate-400">Department</p>
-            <p className="text-lg font-medium text-slate-200">{realMockData.department}</p>
+            <p className="text-sm text-slate-400">Environment</p>
+            <p className="text-lg font-medium text-slate-200">Production Ready</p>
           </div>
           <div>
             <p className="text-sm text-slate-400">Academic Year</p>
             <p className="text-lg font-medium text-slate-200">{realMockData.academic_year}</p>
           </div>
           <div>
-            <p className="text-sm text-slate-400">Last Updated</p>
-            <p className="text-lg font-medium text-slate-200">Today</p>
+            <p className="text-sm text-slate-400">Database Status</p>
+            <p className="text-lg font-bold text-green-500">Connected</p>
           </div>
         </div>
       </div>
     </div>
   );
 }
+

@@ -6,6 +6,9 @@ import timetableRoutes from "./routes/timetables";
 import batchRoutes from "./routes/batches";
 import timeSettingsRoutes from "./routes/timeSettings";
 import chatRoutes from "./routes/chat";
+import facultyRoutes from "./routes/faculty";
+import subjectsRoutes from "./routes/subjects";
+import roomsRoutes from "./routes/rooms";
 
 dotenv.config();
 const app = express();
@@ -29,6 +32,9 @@ app.use("/api/timetables", timetableRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/time-settings", timeSettingsRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/faculty", facultyRoutes);
+app.use("/api/subjects", subjectsRoutes);
+app.use("/api/rooms", roomsRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`Server on ${PORT}`));

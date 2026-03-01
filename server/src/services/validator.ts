@@ -23,21 +23,27 @@ export function validateAndScore(
 
   for (const e of events) {
     const key = `${e.day}-${e.slot}`;
-    const tKey = `${e.teacherCode}-${key}`;
     const rKey = `${e.roomName}-${key}`;
 
-    if (teacherSlots.has(tKey)) {
-      conflicts++;
-      hardViolations.push(`Teacher conflict: ${tKey}`);
-    } else {
-      teacherSlots.set(tKey, new Set());
-    }
-
+    // Room conflict detection
     if (roomSlots.has(rKey)) {
       conflicts++;
       hardViolations.push(`Room conflict: ${rKey}`);
     } else {
       roomSlots.set(rKey, new Set());
+    }
+
+    // Teacher conflict detection (skip for projects)
+    if (!e.isProject && e.teacherCodes) {
+      for (const tc of e.teacherCodes) {
+        const tKey = `${tc}-${key}`;
+        if (teacherSlots.has(tKey)) {
+          conflicts++;
+          hardViolations.push(`Teacher conflict: ${tKey}`);
+        } else {
+          teacherSlots.set(tKey, new Set());
+        }
+      }
     }
   }
 

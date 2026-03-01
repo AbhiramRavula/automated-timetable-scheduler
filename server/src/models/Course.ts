@@ -6,7 +6,7 @@ export interface ICourse extends Document {
   type: "lecture" | "lab" | "tutorial";
   sessionsPerWeek: number;
   durationSlots: number;
-  assignedTeacherCode: string;
+  teacherCodes: string[];
   batch: string;
   preferredRoomTypes: string[];
   priority: "core" | "elective";
@@ -18,12 +18,12 @@ const CourseSchema: Schema = new Schema({
   name: { type: String, required: true },
   type: {
     type: String,
-    enum: ["lecture", "lab", "tutorial"],
+    enum: ["lecture", "lab", "tutorial", "project"],
     required: true,
   },
   sessionsPerWeek: { type: Number, required: true, default: 3 },
   durationSlots: { type: Number, required: true, default: 1 },
-  assignedTeacherCode: { type: String, required: true },
+  teacherCodes: [{ type: String, required: true }],
   batch: { type: String, required: true },
   preferredRoomTypes: [{ type: String, enum: ["lecture", "lab", "seminar"] }],
   priority: {

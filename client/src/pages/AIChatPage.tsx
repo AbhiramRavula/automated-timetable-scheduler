@@ -14,6 +14,7 @@ export function AIChatPage() {
   const [loading, setLoading] = useState(false);
   const [insights, setInsights] = useState<string[]>([]);
   const [data, setData] = useState<any>(null);
+  const [limitReached, setLimitReached] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -46,7 +47,8 @@ export function AIChatPage() {
         body: JSON.stringify({ timetableData })
       });
       const data = await response.json();
-      setInsights(data.insights);
+      setInsights(data.insights || []);
+      if (data.isLimitReached) setLimitReached(true);
     } catch (err) {
       console.error("Failed to fetch insights", err);
     }
@@ -71,6 +73,7 @@ export function AIChatPage() {
       });
       const dataRes = await response.json();
       setMessages(prev => [...prev, { role: "bot", content: dataRes.message }]);
+      if (dataRes.isLimitReached) setLimitReached(true);
     } catch (err) {
       setMessages(prev => [...prev, { role: "bot", content: "Sorry, I'm having trouble connecting to my brain right now." }]);
     } finally {
@@ -143,6 +146,14 @@ export function AIChatPage() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Limit Warning */}
+        {limitReached && (
+          <div className="mx-4 mb-4 p-3 bg-red-900/40 border border-red-700 rounded-lg text-xs text-red-200 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>AI Limit Reached. Some features may be unavailable or using simplified models.</span>
+          </div>
+        )}
 
         {/* Input area */}
         <div className="p-4 bg-slate-900 border-t border-slate-700">

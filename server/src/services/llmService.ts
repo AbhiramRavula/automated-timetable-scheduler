@@ -9,7 +9,14 @@ if (!apiKey) {
 }
 
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const model = genAI?.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI?.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+export class LLMLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LLMLimitError";
+  }
+}
 
 export interface ParsedConstraint {
   type: "hard" | "soft";
@@ -20,12 +27,13 @@ export interface ParsedConstraint {
 
 export interface GeneratedEvent {
   courseCode: string;
-  teacherCode: string;
+  teacherCodes: string[];
   roomName: string;
   day: number;   // 0-5 (Mon-Sat)
   slot: number;  // 0-6 (7 periods including lunch)
   duration: number;
   batch?: string;
+  isProject?: boolean;
 }
 
 export async function parseConstraints(text: string): Promise<ParsedConstraint[]> {
@@ -57,7 +65,10 @@ Rules: ${text}
     const start = responseText.indexOf("[");
     const end = responseText.lastIndexOf("]") + 1;
     return JSON.parse(responseText.slice(start, end));
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status === 429 || error?.message?.includes("429") || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+      throw new LLMLimitError("Gemini API limit reached");
+    }
     console.warn("⚠️ LLM call failed, using mock constraints:", error);
     return [
       { type: "hard", name: "NO_TEACHER_CONFLICT" },
@@ -81,36 +92,48 @@ export async function proposeSchedule(input: {
   
   try {
     const prompt = `
-You are a timetabling algorithm.
+You are a timetabling algorithm. 
 
-Given:
-COURSES: ${JSON.stringify(input.courses, null, 2)}
+CRITICAL RULES:
+1. Use EXACTLY the courseCodes and teacherCodes provided in the JSON below. DO NOT hallucinate or change them.
+2. Every course in the COURSES list MUST be scheduled exactly as many times as sessionsPerWeek indicates.
 
-TEACHERS: ${JSON.stringify(input.teachers, null, 2)}
-
-ROOMS: ${JSON.stringify(input.rooms, null, 2)}
-
+Data:
+COURSES: ${JSON.stringify(input.courses.map(c => ({ code: c.code, name: c.name, batch: c.batch })), null, 2)}
+TEACHERS: ${JSON.stringify(input.teachers.map(t => ({ code: t.code, name: t.name })), null, 2)}
+ROOMS: ${JSON.stringify(input.rooms.map(r => ({ name: r.name })), null, 2)}
 BATCHES: ${JSON.stringify(input.batches || [], null, 2)}
-
 CONSTRAINTS: ${JSON.stringify(input.constraints, null, 2)}
 
 Task:
 1. Generate a feasible timetable as a JSON array of events.
-2. Satisfy all hard constraints (no teacher or room conflicts if possible).
-3. Try to satisfy soft constraints but it's ok if some are violated.
-4. Schedule courses for their assigned batches.
-
-Output ONLY JSON in this shape:
+2. Satisfy all hard constraints (no teacher or room conflicts).
+3. If a subject has multiple teachers, ONE of them from the list can be assigned to a specific session.
+4. Output ONLY JSON in this shape:
 [
-  {"courseCode":"CS101","teacherCode":"T1","roomName":"R101","day":0,"slot":2,"duration":1,"batch":"IT-3A"}
+  {"courseCode":"EXACT_CODE_FROM_LIST","teacherCodes":["TEACHER_CODE_1"],"roomName":"ROOM_NAME","day":0,"slot":0,"duration":1,"batch":"BATCH_NAME"}
 ]
+
+CRITICAL: 
+1. Use slots 0, 1, 2, 3 (before lunch at slot 4) and 5, 6 (after lunch). 
+2. A filled timetable should have about 5-6 periods per day. 
+3. Do NOT leave too many empty spaces.
+4. If a Course has sessionsPerWeek=3, it MUST appear 3 times in the schedule for that batch.
+5. Project subjects (type: project) should be scheduled even if the teacher is busy with another lecture.
+6. Labs (type: lab) MUST be scheduled as exactly 2 continuous periods (duration: 2). DO NOT split them into single periods.
+7. Theory/Lectures are 1 period (duration: 1).
+8. FILL ALL REMAINING GAPS with "LIB" (Library) or "SPORTS".
+9. CRITICAL: "SPORTS" MUST ONLY be scheduled in the afternoon (slots 5 or 6). "LIB" can be anytime.
 `;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
     const start = responseText.indexOf("[");
     const end = responseText.lastIndexOf("]") + 1;
     return JSON.parse(responseText.slice(start, end));
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status === 429 || error?.message?.includes("429") || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+      throw new LLMLimitError("Gemini API limit reached");
+    }
     console.warn("⚠️ LLM call failed, using simple scheduling algorithm:", error);
     return simpleScheduler(input);
   }
@@ -143,12 +166,13 @@ function simpleScheduler(input: {
     // Convert to GeneratedEvent format
     return schedule.map((event: any) => ({
       courseCode: event.courseCode,
-      teacherCode: event.teacherCode,
+      teacherCodes: event.teacherCodes,
       roomName: event.roomName,
       day: event.day,
       slot: event.slot,
       duration: event.duration,
-      batch: event.batch
+      batch: event.batch,
+      isProject: event.isProject
     }));
   } catch (error) {
     console.error("❌ Advanced scheduler failed, using basic fallback:", error);
@@ -156,7 +180,7 @@ function simpleScheduler(input: {
   }
 }
 
-// Basic fallback scheduler (simple greedy approach)
+// Basic fallback scheduler (randomized greedy approach for variety)
 function basicScheduler(input: {
   courses: any[];
   teachers: any[];
@@ -164,7 +188,6 @@ function basicScheduler(input: {
   batches?: any[];
 }): GeneratedEvent[] {
   const events: GeneratedEvent[] = [];
-  const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
   
   // Group courses by batch
   const coursesByBatch: { [batch: string]: any[] } = {};
@@ -176,18 +199,27 @@ function basicScheduler(input: {
   
   // Schedule each batch separately
   for (const [batch, batchCourses] of Object.entries(coursesByBatch)) {
+    // Create session pool
+    let sessionPool: any[] = [];
+    batchCourses.forEach(course => {
+      const sessions = course.sessionsPerWeek || 3;
+      for (let i = 0; i < sessions; i++) sessionPool.push(course);
+    });
+
+    // Shuffle sessions for variety
+    sessionPool = sessionPool.sort(() => Math.random() - 0.5);
+
     let currentDay = 0;
     let currentSlot = 0;
     
-    for (const course of batchCourses) {
-      // Skip lunch slot (slot 4)
-      if (currentSlot === 4) currentSlot = 5;
+    for (const course of sessionPool) {
+      if (currentSlot === 4) currentSlot = 5; // Lunch
       
       const room = input.rooms[Math.floor(Math.random() * input.rooms.length)];
       
       events.push({
         courseCode: course.code,
-        teacherCode: course.teacherCode,
+        teacherCodes: course.teacherCodes,
         roomName: room.name,
         day: currentDay,
         slot: currentSlot,
@@ -195,12 +227,11 @@ function basicScheduler(input: {
         batch: batch
       });
       
-      // Move to next slot
       currentSlot += (course.durationSlots || 1);
-      if (currentSlot >= 7) { // 7 slots per day (0-6, with 4 being lunch)
+      if (currentSlot >= 7) {
         currentSlot = 0;
         currentDay++;
-        if (currentDay >= 6) currentDay = 0; // Wrap to Monday
+        if (currentDay >= 6) currentDay = 0;
       }
     }
   }

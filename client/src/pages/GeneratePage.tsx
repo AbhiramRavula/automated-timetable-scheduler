@@ -1,11 +1,39 @@
 import { useState, useEffect } from "react";
-import { generateTimetables, getBatches } from "../api";
-import { extractRooms, extractFaculty, extractSubjects } from "../realMockData";
+import { generateTimetables, getBatches, getFaculty, getRooms, getSubjects } from "../api";
+import { TimetableDisplay } from "../components/TimetableDisplay";
+const timeSlots = [
+  { name: "Period 1", startTime: "9.40am",  endTime: "10.40am" },
+  { name: "Period 2", startTime: "10:40am", endTime: "11:40am" },
+  { name: "Period 3", startTime: "11:40am", endTime: "12:40pm" },
+  { name: "Period 4", startTime: "12:40pm", endTime: "1:40pm"  },
+  { name: "LUNCH",   startTime: "1:40pm",   endTime: "2:10pm"  },
+  { name: "Period 6", startTime: "2:10pm",  endTime: "3:10pm"  },
+  { name: "Period 7", startTime: "3:10pm",  endTime: "4:10pm"  },
+];
+
+function getSubjectsLookup(facultyMapping: any[]): Record<string, { name: string; faculty: string; code?: string }> {
+  const map: Record<string, { name: string; faculty: string; code?: string }> = {
+    LIB: { name: "Library", faculty: "-" },
+    SPORTS: { name: "Sports", faculty: "-" },
+    CRT: { name: "Critical Reasoning & Thinking", faculty: "Various" },
+    LUNCH: { name: "Lunch Break", faculty: "-" },
+  };
+  (facultyMapping || []).forEach((fm: any) => {
+    if (fm.abbr || fm.code) {
+      map[fm.abbr || fm.code] = { name: fm.subject, faculty: fm.faculty, code: fm.code };
+    }
+  });
+  return map;
+}
 
 export function GeneratePage() {
   const [loading, setLoading] = useState(false);
   const [constraints, setConstraints] = useState("");
   const [batches, setBatches] = useState<any[]>([]);
+  const [faculty, setFaculty] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [results, setResults] = useState<any[]>([]);
   const [status, setStatus] = useState<string>("");
 
   useEffect(() => {
@@ -14,10 +42,18 @@ export function GeneratePage() {
 
   const fetchData = async () => {
     try {
-      const b = await getBatches();
+      const [b, f, r, s] = await Promise.all([
+        getBatches(),
+        getFaculty(),
+        getRooms(),
+        getSubjects()
+      ]);
       setBatches(b);
+      setFaculty(f);
+      setRooms(r);
+      setSubjects(s);
     } catch (err) {
-      console.error("Failed to fetch batches");
+      console.error("Failed to fetch data", err);
     }
   };
 
@@ -27,9 +63,9 @@ export function GeneratePage() {
     
     // In a real app, these would come from state/form
     const request = {
-      courses: extractSubjects(),
-      teachers: extractFaculty(),
-      rooms: extractRooms(),
+      courses: subjects,
+      teachers: faculty,
+      rooms: rooms,
       batches: batches,
       constraintsText: constraints,
       metadata: { generatedAt: new Date().toISOString() }
@@ -37,9 +73,14 @@ export function GeneratePage() {
 
     try {
       setStatus("Generating optimized schedule with AI...");
-      await generateTimetables(request);
-      setStatus("Success! Timetables saved to cloud.");
-      alert("Timetables generated and saved successfully!");
+      const result = await generateTimetables(request);
+      
+      if (result.limitReached) {
+        setStatus("⚠️ API Limit Reached: Offline fallback used.");
+      } else {
+        setStatus("Success! Timetables generated.");
+      }
+      setResults(result.timetables || []);
     } catch (err: any) {
       setStatus(`Error: ${err.message}`);
       alert("Generation failed: " + err.message);
@@ -75,11 +116,11 @@ export function GeneratePage() {
           </div>
           <div className="p-4 bg-slate-900 rounded-lg border border-slate-700">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Faculty</p>
-            <p className="text-xl font-bold text-green-400">{extractFaculty().length}</p>
+            <p className="text-xl font-bold text-green-400">{faculty.length}</p>
           </div>
           <div className="p-4 bg-slate-900 rounded-lg border border-slate-700">
             <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Rooms</p>
-            <p className="text-xl font-bold text-purple-400">{extractRooms().length}</p>
+            <p className="text-xl font-bold text-purple-400">{rooms.length}</p>
           </div>
         </div>
 
@@ -111,6 +152,40 @@ export function GeneratePage() {
           </p>
         )}
       </div>
+
+      {results.length > 0 && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-slate-50">Generated Results</h2>
+            <p className="text-slate-400 text-sm">{results.length} batches processed</p>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-12">
+            {results.map((tt, idx) => (
+              <div key={idx} className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-2xl">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-blue-400">{tt.class}</h3>
+                  <div className="flex gap-2">
+                    <span className="px-2 py-1 bg-slate-900 rounded text-xs text-slate-400">Room: {tt.room || tt.room_no || 'TBA'}</span>
+                    <span className="px-2 py-1 bg-slate-900 rounded text-xs text-slate-400">Teacher: {tt.classTeacher || tt.class_teacher || 'TBA'}</span>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg overflow-hidden">
+                  <TimetableDisplay
+                    timetable={{
+                      ...tt,
+                      id: `new-${idx}`,
+                      schedule: tt.schedule || {}
+                    }}
+                    subjects={getSubjectsLookup(tt.faculty_mapping || [])}
+                    timeSlots={timeSlots}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-blue-900/20 border border-blue-800/50 p-6 rounded-xl">
         <h3 className="text-blue-400 font-bold mb-2 flex items-center gap-2">

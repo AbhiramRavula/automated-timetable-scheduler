@@ -16,7 +16,9 @@ export interface BatchInfo {
 
 export interface LabSession {
   batchName: string;
-  group: "A" | "B" | "C" | "ALL";  // Which third of the batch
+  courseCode?: string;
+  teacherCodes?: string[];
+  group: "A" | "B" | "C" | "ALL";  
   labRoom: string;
   day: number;
   slot: number;
@@ -76,7 +78,7 @@ export class LabScheduler {
   generateLabSessions(
     batch: BatchInfo,
     courseCode: string,
-    teacherCode: string,
+    teacherCodes: string[],
     startDay: number,
     startSlot: number
   ): LabSession[] {
@@ -90,6 +92,8 @@ export class LabScheduler {
       for (let i = 0; i < this.config.sessionsPerWeek; i++) {
         sessions.push({
           batchName: batch.name,
+          courseCode,
+          teacherCodes,
           group: "ALL",
           labRoom: lab,
           day: (startDay + i) % 6,
@@ -110,6 +114,8 @@ export class LabScheduler {
         for (let sessionIdx = 0; sessionIdx < this.config.sessionsPerWeek; sessionIdx++) {
           sessions.push({
             batchName: batch.name,
+            courseCode,
+            teacherCodes,
             group: group,
             labRoom: lab,
             day: (startDay + sessionIdx * groups + groupIdx) % 6,
@@ -286,7 +292,7 @@ export const defaultLabConfig: LabConfig = {
 export function scheduleLabsForBatch(
   batch: BatchInfo,
   courseCode: string,
-  teacherCode: string,
+  teacherCodes: string[],
   config: LabConfig = defaultLabConfig
 ): LabSession[] {
   const scheduler = new LabScheduler(config);
@@ -306,7 +312,7 @@ export function scheduleLabsForBatch(
   const sessions = scheduler.generateLabSessions(
     batch,
     courseCode,
-    teacherCode,
+    teacherCodes,
     0, // Start day
     2  // Start slot (mid-morning)
   );
