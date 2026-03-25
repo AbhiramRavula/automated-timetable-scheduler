@@ -54,7 +54,7 @@ function normaliseDoc(doc: any): any[] {
         day,
         (cells as any[]).map((c: any) => {
           if (c === "OCCUPIED") return null;
-          if (c && typeof c === "object") return c.subject ?? null;
+          if (c && typeof c === "object") return c; // preserve { subject, room, span } so room numbers render
           return c;
         }),
       ])
@@ -293,6 +293,7 @@ export function TimetablesPage() {
             <div className="p-4" id={`gen-${gen.id}`}>
               {activeTT ? (
                 <TimetableDisplay
+                  key={`${gen.id}-${activeIdx}`} // Ensure state resets on tab/gen change
                   timetable={{
                     id: `${gen.id}-${activeIdx}`,
                     class: activeTT.class || activeTT.name || "Unknown",

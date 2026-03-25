@@ -172,6 +172,7 @@ export function GeneratePage() {
                 </div>
                 <div className="bg-white rounded-lg overflow-hidden">
                   <TimetableDisplay
+                    key={`new-${idx}-${results.length}`} // Force reset on new results
                     timetable={{
                       ...tt,
                       id: `new-${idx}`,

@@ -115,6 +115,30 @@ class SoftConstraints {
 
     return 1 / (1 + totalGaps); // Higher score = fewer gaps
   }
+
+  // Calculate day balance score (prefer even distribution of core subjects)
+  static calculateDayBalanceScore(events: ScheduleEvent[], batch: string): number {
+    const batchEvents = events.filter(e => e.batch === batch && e.courseCode !== "LIB" && e.courseCode !== "SPORTS");
+    const countsPerDay = Array(6).fill(0);
+    
+    batchEvents.forEach(e => {
+      countsPerDay[e.day] += 1;
+    });
+
+    // We want to avoid days with 0 classes if total classes > 5
+    const totalClasses = batchEvents.length;
+    const emptyDays = countsPerDay.filter(c => c === 0).length;
+    
+    // Penalize if some days are very heavy and others are empty
+    const mean = totalClasses / 6;
+    let variance = 0;
+    countsPerDay.forEach(c => {
+      variance += Math.pow(c - mean, 2);
+    });
+
+    const penalty = (emptyDays > 0 && totalClasses > 5) ? 10 : 1;
+    return 1 / (1 + (variance * penalty));
+  }
 }
 
 // N-1 Operator: Move a single event to a different time slot
@@ -365,10 +389,12 @@ export class TimetableScheduler {
 
     batches.forEach(batch => {
       const gapScore = SoftConstraints.calculateGapScore(events, batch);
-      totalScore += gapScore;
+      const balanceScore = SoftConstraints.calculateDayBalanceScore(events, batch);
+      // Combine scores: Balance is very important to avoid "all library" days
+      totalScore += (gapScore * 0.4) + (balanceScore * 0.6);
     });
 
-    return totalScore / (batches.length + events.length);
+    return totalScore / (batches.length + (events.length / 20));
   }
 
   // Group courses by batch
@@ -438,19 +464,30 @@ export class TimetableScheduler {
 
           if (!isBusy) {
             // Fill with Library or Sports
-            // Rules: Sports only in afternoon (slot 5, 6)
-            const canSports = slot > 4;
-            const filler = (canSports && Math.random() < 0.5) ? "SPORTS" : "LIB";
-            
-            finalEvents.push({
-              courseCode: filler,
-              teacherCodes: ["-"],
-              roomName: filler === "SPORTS" ? "Ground" : (this.rooms.find(r => r.name.toLowerCase().includes("library"))?.name || "Library"),
-              batch: batch,
-              day: day,
-              slot: slot,
-              duration: 1
-            });
+            // Rules: 
+            // 1. Sports only in afternoon (slot 5, 6)
+            // 2. Max 2 Library per day
+            // 3. Max 2 Sports per day
+            const dayEvents = finalEvents.filter(e => e.batch === batch && e.day === day);
+            const libCount = dayEvents.filter(e => e.courseCode === "LIB").length;
+            const sportsCount = dayEvents.filter(e => e.courseCode === "SPORTS").length;
+
+            const canSports = slot > 4 && sportsCount < 2;
+            const canLib = libCount < 2;
+
+            if (canSports || canLib) {
+              const filler = (canSports && (Math.random() < 0.5 || !canLib)) ? "SPORTS" : "LIB";
+              
+              finalEvents.push({
+                courseCode: filler,
+                teacherCodes: ["-"],
+                roomName: filler === "SPORTS" ? "Ground" : (this.rooms.find(r => r.name.toLowerCase().includes("library"))?.name || "Library"),
+                batch: batch,
+                day: day,
+                slot: slot,
+                duration: 1
+              });
+            }
           }
         }
       }

@@ -135,8 +135,7 @@ router.post("/generate", async (req: Request, res: Response) => {
     for (const batchName of Object.keys(timetablesByBatch)) {
       const batchObj = timetablesByBatch[batchName];
 
-      // Build faculty_mapping: include course details for anything scheduled in this batch
-      // This solves the "empty spaces in footer" problem if AI hallucinated codes or assigned wrong batch
+      // Collect all subjects that were actually scheduled in this batch
       const scheduledInThisBatch = new Set<string>();
       Object.values(batchObj.schedule).forEach((row: any) => {
         row.forEach((slot: any) => {
@@ -145,25 +144,51 @@ router.post("/generate", async (req: Request, res: Response) => {
         });
       });
 
+      // Build faculty_mapping: include all courses assigned to this batch
+      const batchCourses = (courses || []).filter((c: any) => normalize(c.batch) === normalize(batchName));
+      
+      console.log(`[DEBUG] Batch: "${batchName}" (normalized: "${normalize(batchName)}")`);
+      console.log(`[DEBUG] Found ${batchCourses.length} subjects for this batch.`);
+      if (batchCourses.length < 5 && courses && courses.length > 0) {
+        console.log(`[DEBUG] First course batch in DB: "${courses[0].batch}" (normalized: "${normalize(courses[0].batch)}")`);
+      }
+
       const batchFacultyMapping: any[] = [];
+      
+      batchCourses.forEach((c: any) => {
+        const faculties = c.teacherCodes.map((tc: string) => teacherLookup[tc] || tc).join(", ");
+        batchFacultyMapping.push({
+          code: c.code,
+          subject: c.name || c.subject || c.code,
+          abbr: c.code,
+          faculty: faculties || "TBA",
+        });
+      });
+
+      // Also add any other subjects that were actually scheduled (like LIB, SPORTS, or hallucinations)
       scheduledInThisBatch.forEach(normCode => {
-        const c = courseMap[normCode];
-        if (c) {
-          const faculties = c.teacherCodes.map((tc: string) => teacherLookup[tc] || tc).join(", ");
-          batchFacultyMapping.push({
-            code: c.code,
-            subject: c.name || c.subject || c.code,
-            abbr: c.code,
-            faculty: faculties || "TBA",
-          });
-        } else {
-          // If still not found, use a fallback from the code itself
-          batchFacultyMapping.push({
-            code: normCode.toUpperCase(),
-            subject: "Unknown Subject",
-            abbr: normCode.toUpperCase(),
-            faculty: "TBA",
-          });
+        if (!batchFacultyMapping.some(fm => normalize(fm.code) === normCode)) {
+          // Fuzzy match: check if normCode starts with or is part of any course code in the entire list
+          const fuzzyMatch = (courses || []).find((c: any) => 
+            normalize(c.code).includes(normCode) || normCode.includes(normalize(c.code))
+          );
+          
+          if (fuzzyMatch) {
+             const faculties = fuzzyMatch.teacherCodes.map((tc: string) => teacherLookup[tc] || tc).join(", ");
+             batchFacultyMapping.push({
+               code: fuzzyMatch.code,
+               subject: fuzzyMatch.name || fuzzyMatch.subject || fuzzyMatch.code,
+               abbr: fuzzyMatch.code,
+               faculty: faculties || "TBA",
+             });
+          } else {
+            batchFacultyMapping.push({
+              code: normCode.toUpperCase(),
+              subject: normCode.includes("lib") ? "Library" : (normCode.includes("sports") ? "Sports" : "Unknown Subject"),
+              abbr: normCode.toUpperCase(),
+              faculty: "-",
+            });
+          }
         }
       });
 

@@ -98,7 +98,22 @@ export function BatchesPage() {
   };
 
   const handlePromoteAll = async () => {
-    if (confirm("This will promote all batches to the next semester. Batches in VIII SEM will be graduated (removed). Continue?")) {
+    // Check for VIII semester batches
+    const eighthSemBatches = batches.filter(b => 
+      b.name.includes("VIII SEM") || b.semester === "VIII"
+    );
+    
+    if (eighthSemBatches.length > 0) {
+      const confirmGraduation = confirm(
+        `Found ${eighthSemBatches.length} batch(es) in VIII semester:\n` +
+        eighthSemBatches.map(b => `- ${b.name}`).join('\n') +
+        `\n\nThese batches will be GRADUATED (deleted). Continue?`
+      );
+      
+      if (!confirmGraduation) return;
+    }
+    
+    if (confirm("This will promote all batches to the next semester. Continue?")) {
       setPreviousBatches([...batches]);
       setPreviousSemester(currentSemester);
 
@@ -107,25 +122,28 @@ export function BatchesPage() {
         "V": "VI", "VI": "VII", "VII": "VIII"
       };
 
+      // Filter out VIII semester batches (they graduate)
       const promotedBatches: Batch[] = (batches
         .map(b => {
           const currentSem = b.semester || "I";
-          if (currentSem === "VIII") return null;
+          if (currentSem === "VIII") return null; // Graduate
           const newSem = semesterMap[currentSem] || currentSem;
           const newName = b.name.replace(/\b(I|II|III|IV|V|VI|VII)\s+SEM\b/, `${newSem} SEM`);
           return { ...b, semester: newSem, name: newName };
         }) as (Batch | null)[]
-      ).filter((b): b is Batch => b != null);
+      ).filter((b): b is Batch => b !== null);
 
       try {
+        // Update promoted batches
         await Promise.all(promotedBatches.map(b => {
           const bid = b._id || b.id;
           if (!bid) return Promise.resolve();
           return updateBatch(bid, b);
         }));
         
+        // Delete graduated batches (VIII semester)
         const graduatedIds = batches
-          .filter(b => b.semester === "VIII")
+          .filter(b => b.semester === "VIII" || b.name.includes("VIII SEM"))
           .map(b => b._id || b.id)
           .filter((id): id is string => typeof id === "string");
           
@@ -133,10 +151,43 @@ export function BatchesPage() {
         
         setBatches(promotedBatches);
         setCurrentSemester(currentSemester === "Odd" ? "Even" : "Odd");
+        
+        alert(`Promotion complete! ${graduatedIds.length} batch(es) graduated.`);
       } catch (error) {
         alert("Partial failure during promotion. Some batches might not have updated.");
       }
     }
+  };
+
+  const handleSemesterToggle = () => {
+    const newSemester = currentSemester === "Odd" ? "Even" : "Odd";
+    
+    // Update all batch names to reflect new semester
+    const updatedBatches = batches.map(b => {
+      const currentSem = b.semester || "I";
+      // Toggle between odd and even semesters
+      const semesterMap: { [key: string]: string } = {
+        "I": "II", "II": "I", 
+        "III": "IV", "IV": "III",
+        "V": "VI", "VI": "V", 
+        "VII": "VIII", "VIII": "VII"
+      };
+      const newSem = semesterMap[currentSem] || currentSem;
+      const newName = b.name.replace(/\b(I|II|III|IV|V|VI|VII|VIII)\s+SEM\b/, `${newSem} SEM`);
+      return { ...b, semester: newSem, name: newName };
+    });
+    
+    // Update in backend
+    Promise.all(updatedBatches.map(b => {
+      const bid = b._id || b.id;
+      if (!bid) return Promise.resolve();
+      return updateBatch(bid, b);
+    })).then(() => {
+      setBatches(updatedBatches);
+      setCurrentSemester(newSemester);
+    }).catch(() => {
+      alert("Failed to update semester toggle");
+    });
   };
 
   const handleUndo = async () => {
@@ -218,9 +269,7 @@ export function BatchesPage() {
             </p>
           </div>
           <button
-            onClick={() =>
-              setCurrentSemester(currentSemester === "Odd" ? "Even" : "Odd")
-            }
+            onClick={handleSemesterToggle}
             className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors text-white"
           >
             Switch to {currentSemester === "Odd" ? "Even" : "Odd"}
