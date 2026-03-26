@@ -8,6 +8,7 @@ export interface IRoom extends Document {
   floor: string;
   availableDays: number[];
   availableSlots: number[];
+  tags: string[];
 }
 
 const RoomSchema: Schema = new Schema({
@@ -22,6 +23,7 @@ const RoomSchema: Schema = new Schema({
   floor: { type: String, default: "Ground Floor" },
   availableDays: [{ type: Number }],
   availableSlots: [{ type: Number }],
+  tags: [{ type: String }],
 });
 
 export default mongoose.model<IRoom>("Room", RoomSchema);

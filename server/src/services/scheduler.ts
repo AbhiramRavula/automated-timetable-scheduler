@@ -10,6 +10,7 @@ export interface Course {
   type?: "lecture" | "lab" | "tutorial" | "project";
   isLab?: boolean;          
   requiresSplitting?: boolean; 
+  requiredRoomTag?: string; // NEW
 }
 
 export interface Teacher {
@@ -20,7 +21,8 @@ export interface Teacher {
 export interface Room {
   name: string;
   capacity: number;
-  type?: "lecture" | "lab" | "large-lab"; // NEW: Room type classification
+  type?: "lecture" | "lab" | "large-lab"; 
+  tags?: string[]; // NEW
 }
 
 export interface ScheduleEvent {
@@ -40,52 +42,59 @@ export interface Constraint {
   weight?: number;
 }
 
-// Hard constraints that must never be violated
+// NEW: Matrix for O(1) conflict detection
+class ConflictMatrix {
+  private teacherSlots = new Set<string>();
+  private roomSlots = new Set<string>();
+  private batchSlots = new Set<string>();
+
+  clear() {
+    this.teacherSlots.clear();
+    this.roomSlots.clear();
+    this.batchSlots.clear();
+  }
+
+  add(event: ScheduleEvent) {
+    for (let i = 0; i < event.duration; i++) {
+        const slot = event.slot + i;
+        const key = `${event.day}-${slot}`;
+        event.teacherCodes.forEach(t => this.teacherSlots.add(`${t}-${key}`));
+        this.roomSlots.add(`${event.roomName}-${key}`);
+        this.batchSlots.add(`${event.batch}-${key}`);
+    }
+  }
+
+  remove(event: ScheduleEvent) {
+    for (let i = 0; i < event.duration; i++) {
+        const slot = event.slot + i;
+        const key = `${event.day}-${slot}`;
+        event.teacherCodes.forEach(t => this.teacherSlots.delete(`${t}-${key}`));
+        this.roomSlots.delete(`${event.roomName}-${key}`);
+        this.batchSlots.delete(`${event.batch}-${key}`);
+    }
+  }
+
+  isConflict(event: ScheduleEvent): boolean {
+    for (let i = 0; i < event.duration; i++) {
+        const slot = event.slot + i;
+        const key = `${event.day}-${slot}`;
+        
+        if (!event.isProject && event.teacherCodes.some(t => this.teacherSlots.has(`${t}-${key}`))) return true;
+        if (this.roomSlots.has(`${event.roomName}-${key}`)) return true;
+        if (this.batchSlots.has(`${event.batch}-${key}`)) return true;
+    }
+    return false;
+  }
+}
+
+// Updated HardConstraints to use the matrix for speed
 class HardConstraints {
-  static teacherConflict(events: ScheduleEvent[], newEvent: ScheduleEvent): boolean {
-    if (newEvent.isProject) return false; // NEW: Projects don't block teachers
-    
-    return events.some(e => 
-      !e.isProject && // NEW: Ignore projects in existing schedule
-      e.teacherCodes.some(tc => newEvent.teacherCodes.includes(tc)) &&
-      e.day === newEvent.day &&
-      this.timeSlotsOverlap(e.slot, e.duration, newEvent.slot, newEvent.duration)
-    );
+  static validate(matrix: ConflictMatrix, newEvent: ScheduleEvent): boolean {
+    return !matrix.isConflict(newEvent);
   }
 
-  // Check if room is already occupied
-  static roomConflict(events: ScheduleEvent[], newEvent: ScheduleEvent): boolean {
-    return events.some(e => 
-      e.roomName === newEvent.roomName &&
-      e.day === newEvent.day &&
-      this.timeSlotsOverlap(e.slot, e.duration, newEvent.slot, newEvent.duration)
-    );
-  }
-
-  // Check if batch already has a class at this time
-  static batchConflict(events: ScheduleEvent[], newEvent: ScheduleEvent): boolean {
-    return events.some(e => 
-      e.batch === newEvent.batch &&
-      e.day === newEvent.day &&
-      this.timeSlotsOverlap(e.slot, e.duration, newEvent.slot, newEvent.duration)
-    );
-  }
-
-  // Check if time slots overlap
-  private static timeSlotsOverlap(
-    slot1: number, duration1: number,
-    slot2: number, duration2: number
-  ): boolean {
-    const end1 = slot1 + duration1;
-    const end2 = slot2 + duration2;
-    return slot1 < end2 && slot2 < end1;
-  }
-
-  // Check all hard constraints
-  static validate(events: ScheduleEvent[], newEvent: ScheduleEvent): boolean {
-    return !this.teacherConflict(events, newEvent) &&
-           !this.roomConflict(events, newEvent) &&
-           !this.batchConflict(events, newEvent);
+  static timeSlotsOverlap(s1: number, d1: number, s2: number, d2: number): boolean {
+    return s1 < s2 + d2 && s2 < s1 + d1;
   }
 }
 
@@ -143,107 +152,79 @@ class SoftConstraints {
 
 // N-1 Operator: Move a single event to a different time slot
 class N1Operator {
-  static apply(events: ScheduleEvent[], rooms: Room[]): ScheduleEvent[] | null {
+  static apply(matrix: ConflictMatrix, events: ScheduleEvent[], rooms: Room[]): ScheduleEvent[] | null {
     if (events.length === 0) return null;
 
-    // Pick a random event to move
     const eventIndex = Math.floor(Math.random() * events.length);
     const eventToMove = events[eventIndex];
-    const otherEvents = events.filter((_, i) => i !== eventIndex);
+    
+    // Remove current event from matrix to check for new spots
+    matrix.remove(eventToMove);
 
-    // Try to find a better slot
-    for (let day = 0; day < 6; day++) {
-      for (let slot = 0; slot < 7; slot++) {
-        if (slot === 4) continue; // Skip lunch
+    for (let attempts = 0; attempts < 20; attempts++) {
+      const day = Math.floor(Math.random() * 6);
+      const slot = Math.floor(Math.random() * 7);
+      if (slot === 4) continue;
 
-        const newEvent = { ...eventToMove, day, slot };
+      const newEvent = { ...eventToMove, day, slot };
 
-        if (HardConstraints.validate(otherEvents, newEvent)) {
-          const newSchedule = [...otherEvents, newEvent];
-          
-          // Check if this improves the schedule
-          if (this.isBetterSchedule(events, newSchedule, eventToMove.batch)) {
-            return newSchedule;
-          }
-        }
+      if (HardConstraints.validate(matrix, newEvent)) {
+        matrix.add(newEvent); // Add new position to matrix
+        const newSchedule = [...events];
+        newSchedule[eventIndex] = newEvent;
+        return newSchedule;
       }
     }
 
+    matrix.add(eventToMove); // Restore if no spot found
     return null;
-  }
-
-  private static isBetterSchedule(
-    oldSchedule: ScheduleEvent[],
-    newSchedule: ScheduleEvent[],
-    batch: string
-  ): boolean {
-    const oldGap = SoftConstraints.calculateGapScore(oldSchedule, batch);
-    const newGap = SoftConstraints.calculateGapScore(newSchedule, batch);
-    
-    return newGap > oldGap;
   }
 }
 
 // N-2 Operator: Swap two events
 class N2Operator {
-  static apply(events: ScheduleEvent[]): ScheduleEvent[] | null {
+  static apply(matrix: ConflictMatrix, events: ScheduleEvent[]): ScheduleEvent[] | null {
     if (events.length < 2) return null;
 
-    // Pick two random events
     const idx1 = Math.floor(Math.random() * events.length);
     let idx2 = Math.floor(Math.random() * events.length);
-    while (idx2 === idx1) {
-      idx2 = Math.floor(Math.random() * events.length);
+    while (idx2 === idx1) idx2 = Math.floor(Math.random() * events.length);
+
+    const e1 = events[idx1];
+    const e2 = events[idx2];
+
+    // Remove both from matrix
+    matrix.remove(e1);
+    matrix.remove(e2);
+
+    const swappedE1 = { ...e1, day: e2.day, slot: e2.slot };
+    const swappedE2 = { ...e2, day: e1.day, slot: e1.slot };
+
+    if (HardConstraints.validate(matrix, swappedE1)) {
+        matrix.add(swappedE1);
+        if (HardConstraints.validate(matrix, swappedE2)) {
+            matrix.add(swappedE2);
+            const newSchedule = [...events];
+            newSchedule[idx1] = swappedE1;
+            newSchedule[idx2] = swappedE2;
+            return newSchedule;
+        }
+        matrix.remove(swappedE1);
     }
-
-    const event1 = events[idx1];
-    const event2 = events[idx2];
-
-    // Swap their time slots
-    const swappedEvent1 = { ...event1, day: event2.day, slot: event2.slot };
-    const swappedEvent2 = { ...event2, day: event1.day, slot: event1.slot };
-
-    const otherEvents = events.filter((_, i) => i !== idx1 && i !== idx2);
-
-    // Validate both swapped events
-    if (HardConstraints.validate(otherEvents, swappedEvent1) &&
-        HardConstraints.validate([...otherEvents, swappedEvent1], swappedEvent2)) {
-      
-      const newSchedule = [...otherEvents, swappedEvent1, swappedEvent2];
-      
-      // Check if swap improves schedule
-      if (this.isBetterSchedule(events, newSchedule)) {
-        return newSchedule;
-      }
-    }
-
-    return null;
-  }
-
-  private static isBetterSchedule(
-    oldSchedule: ScheduleEvent[],
-    newSchedule: ScheduleEvent[]
-  ): boolean {
-    const batches = [...new Set(oldSchedule.map(e => e.batch))];
     
-    let oldScore = 0;
-    let newScore = 0;
-
-    batches.forEach(batch => {
-      oldScore += SoftConstraints.calculateGapScore(oldSchedule, batch);
-      newScore += SoftConstraints.calculateGapScore(newSchedule, batch);
-    });
-
-    return newScore > oldScore;
+    // Restore if swap fails
+    matrix.add(e1);
+    matrix.add(e2);
+    return null;
   }
 }
 
-// Main Scheduler with Local Search Optimization
 export class TimetableScheduler {
   private courses: Course[];
   private teachers: Teacher[];
   private rooms: Room[];
   private maxIterations: number;
+  private matrix: ConflictMatrix = new ConflictMatrix();
 
   constructor(
     courses: Course[],
@@ -260,43 +241,44 @@ export class TimetableScheduler {
   // Generate initial feasible solution using round-robin approach for variety
   private generateInitialSolution(): ScheduleEvent[] {
     const events: ScheduleEvent[] = [];
+    this.matrix.clear();
     const coursesByBatch = this.groupCoursesByBatch();
 
-    for (const [batch, batchCourses] of Object.entries(coursesByBatch)) {
-      // Create a pool of sessions to be scheduled
+    const sortedBatches = Object.entries(coursesByBatch).sort((a, b) => b[1].length - a[1].length);
+
+    for (const [batch, batchCourses] of sortedBatches) {
       let sessionPool: { course: Course, id: number }[] = [];
-      batchCourses.forEach(course => {
-        // Assume courses have sessionsPerWeek, default to 3 if not specified
+      
+      const sortedBatchCourses = [...batchCourses].sort((a, b) => {
+        if (a.type === "lab" && b.type !== "lab") return -1;
+        if (a.type !== "lab" && b.type === "lab") return 1;
+        return b.durationSlots - a.durationSlots;
+      });
+
+      sortedBatchCourses.forEach(course => {
         const sessionsCount = (course as any).sessionsPerWeek || 3;
         for (let i = 0; i < sessionsCount; i++) {
           sessionPool.push({ course, id: i });
         }
       });
 
-      // Shuffle the pool for variety
-      sessionPool = sessionPool.sort(() => Math.random() - 0.5);
-
       let day = 0;
       let slot = 0;
       let attempts = 0;
-      const maxAttempts = 1000;
+      const maxAttempts = 2000;
 
       while (sessionPool.length > 0 && attempts < maxAttempts) {
         attempts++;
         const { course } = sessionPool[0];
 
-        if (slot === 4) { // Skip lunch
-          slot = 5;
-        }
+        if (slot === 4) { slot = 5; }
 
         const duration = course.type === "lab" ? 2 : course.durationSlots;
 
         if (slot + duration > 7) {
           day++;
           slot = 0;
-          if (day >= 6) { // Wrap around and try again if stuck
-             day = 0;
-          }
+          if (day >= 6) day = 0;
           continue;
         }
 
@@ -312,12 +294,12 @@ export class TimetableScheduler {
           isProject: course.type === "project"
         };
 
-        if (HardConstraints.validate(events, newEvent)) {
+        if (HardConstraints.validate(this.matrix, newEvent)) {
           events.push(newEvent);
-          sessionPool.shift(); // Successfully placed
+          this.matrix.add(newEvent);
+          sessionPool.shift();
           slot += duration;
         } else {
-          // If can't place here, move to next slot or day
           slot++;
           if (slot >= 7) {
             slot = 0;
@@ -335,50 +317,41 @@ export class TimetableScheduler {
   private optimizeSchedule(initialSchedule: ScheduleEvent[]): ScheduleEvent[] {
     let currentSchedule = [...initialSchedule];
     let bestSchedule = [...initialSchedule];
-    let bestScore = this.evaluateSchedule(bestSchedule);
+    let currentScore = this.evaluateSchedule(currentSchedule);
+    let bestScore = currentScore;
 
-    console.log(`🔍 Starting optimization with initial score: ${bestScore.toFixed(3)}`);
+    let temperature = 1.0;
+    const coolingRate = 0.995;
+    const minTemperature = 0.01;
 
-    let improvementCount = 0;
-    let noImprovementCount = 0;
+    console.log(`🔍 Optimization (Simulated Annealing) starting at score: ${bestScore.toFixed(3)}`);
 
-    for (let iteration = 0; iteration < this.maxIterations; iteration++) {
+    for (let iteration = 0; iteration < this.maxIterations && temperature > minTemperature; iteration++) {
       let newSchedule: ScheduleEvent[] | null = null;
-
-      // Randomly choose between N-1 and N-2 operators
       if (Math.random() < 0.5) {
-        newSchedule = N1Operator.apply(currentSchedule, this.rooms);
+        newSchedule = N1Operator.apply(this.matrix, currentSchedule, this.rooms);
       } else {
-        newSchedule = N2Operator.apply(currentSchedule);
+        newSchedule = N2Operator.apply(this.matrix, currentSchedule);
       }
 
       if (newSchedule) {
         const newScore = this.evaluateSchedule(newSchedule);
+        const scoreDiff = newScore - currentScore;
 
-        // Accept if better (hill climbing)
-        if (newScore > bestScore) {
-          bestSchedule = newSchedule;
+        if (scoreDiff > 0 || Math.random() < Math.exp(scoreDiff / temperature)) {
           currentSchedule = newSchedule;
-          bestScore = newScore;
-          improvementCount++;
-          noImprovementCount = 0;
-          
-          if (iteration % 100 === 0) {
-            console.log(`✨ Iteration ${iteration}: Improved score to ${bestScore.toFixed(3)}`);
-          }
-        } else {
-          noImprovementCount++;
-        }
+          currentScore = newScore;
 
-        // Early stopping if no improvement for a while
-        if (noImprovementCount > 200) {
-          console.log(`⏹️ Early stopping at iteration ${iteration} (no improvement)`);
-          break;
+          if (currentScore > bestScore) {
+            bestSchedule = [...currentSchedule];
+            bestScore = currentScore;
+          }
         }
       }
+      temperature *= coolingRate;
     }
 
-    console.log(`✅ Optimization complete: ${improvementCount} improvements, final score: ${bestScore.toFixed(3)}`);
+    console.log(`✅ Optimization complete: Score improved to ${bestScore.toFixed(3)}`);
     return bestSchedule;
   }
 
@@ -414,16 +387,21 @@ export class TimetableScheduler {
 
   // Select appropriate room for course
   private selectRoom(course: Course): Room {
-    // Check if it's a large batch (70 students)
-    const batchCourses = this.courses.filter(c => c.batch === course.batch);
-    const estimatedBatchSize = batchCourses.length > 5 ? 70 : 30; // 70 for main batches
+    if (course.requiredRoomTag) {
+      const taggedRooms = this.rooms.filter(r => 
+        r.tags && r.tags.includes(course.requiredRoomTag!)
+      );
+      if (taggedRooms.length > 0) {
+        return taggedRooms[Math.floor(Math.random() * taggedRooms.length)];
+      }
+    }
 
-    // Lab courses need lab rooms
+    const batchCourses = this.courses.filter(c => c.batch === course.batch);
+    const estimatedBatchSize = batchCourses.length > 5 ? 70 : 30;
+
     if (course.isLab || course.type === "lab" || course.durationSlots > 1) {
       const labs = this.rooms.filter(r => 
-        r.type === "lab" || 
-        r.name.includes("N30") || 
-        r.capacity >= 25
+        r.type === "lab" || r.capacity >= 25
       );
       
       if (labs.length > 0) {
@@ -431,7 +409,6 @@ export class TimetableScheduler {
       }
     }
     
-    // Regular lecture rooms (now mostly 70 capacity)
     const lectureRooms = this.rooms.filter(r => 
       (r.type === "lecture" || !r.type) && r.capacity >= estimatedBatchSize
     );
@@ -440,14 +417,13 @@ export class TimetableScheduler {
       return lectureRooms[Math.floor(Math.random() * lectureRooms.length)];
     }
     
-    // Fallback: any available room
     return this.rooms[Math.floor(Math.random() * this.rooms.length)];
   }
 
   // Fill empty slots with Sports and Library
   private fillGaps(events: ScheduleEvent[]): ScheduleEvent[] {
     const finalEvents = [...events];
-    const batches = [...new Set(this.courses.map(c => c.batch || "DEFAULT"))];
+    const batches = [...new Set(this.courses.map((c: Course) => c.batch || "DEFAULT"))];
     const roomFallback = this.rooms[0]?.name || "Online";
 
     for (const batch of batches) {
@@ -533,22 +509,13 @@ export class TimetableScheduler {
   // Validate entire schedule for hard constraints
   private validateSchedule(events: ScheduleEvent[]): string[] {
     const violations: string[] = [];
+    const validationMatrix = new ConflictMatrix();
 
-    for (let i = 0; i < events.length; i++) {
-      const event = events[i];
-      const otherEvents = events.filter((_, idx) => idx !== i);
-
-      if (HardConstraints.teacherConflict(otherEvents, event)) {
-        violations.push(`Teacher conflict: ${event.teacherCodes.join(', ')} at day ${event.day}, slot ${event.slot}`);
+    for (const event of events) {
+      if (validationMatrix.isConflict(event)) {
+        violations.push(`Conflict: ${event.courseCode} at day ${event.day}, slot ${event.slot}`);
       }
-
-      if (HardConstraints.roomConflict(otherEvents, event)) {
-        violations.push(`Room conflict: ${event.roomName} at day ${event.day}, slot ${event.slot}`);
-      }
-
-      if (HardConstraints.batchConflict(otherEvents, event)) {
-        violations.push(`Batch conflict: ${event.batch} at day ${event.day}, slot ${event.slot}`);
-      }
+      validationMatrix.add(event);
     }
 
     return violations;

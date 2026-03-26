@@ -20,6 +20,7 @@ export interface TimetableGenerateResponse {
   };
   hardViolations: string[];
   limitReached?: boolean;
+  workload?: any[];
 }
 
 const API_BASE_URL = "http://localhost:4000/api";

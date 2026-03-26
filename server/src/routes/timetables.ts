@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import Timetable from "../models/Timetable";
 import { parseConstraints, proposeSchedule } from "../services/llmService";
 import { validateAndScore } from "../services/validator";
+import { WorkloadAnalyzer } from "../services/workloadAnalyzer";
 
 const router = Router();
 
@@ -206,6 +207,9 @@ router.post("/generate", async (req: Request, res: Response) => {
     // Convert to array
     const timetables = Object.values(timetablesByBatch);
 
+    // Aggregate workload for all teachers
+    const workload = WorkloadAnalyzer.getWorkload(result.events as any, teachers, courses);
+
     // Persist to MongoDB
     const persistedTimetable = new Timetable({
       courses: courses || [],
@@ -214,6 +218,7 @@ router.post("/generate", async (req: Request, res: Response) => {
       grid: timetablesByBatch,
       constraintsSnapshot: constraints,
       metrics: result.metrics,
+      workload: workload,
       metadata: { ...metadata, limitReached }
     });
 
@@ -225,7 +230,8 @@ router.post("/generate", async (req: Request, res: Response) => {
       timetables: timetables,   
       metrics: result.metrics,
       hardViolations: result.hardViolations,
-      limitReached: limitReached
+      limitReached: limitReached,
+      workload: workload
     });
   } catch (err: any) {
     console.error("❌ Error generating timetable:");

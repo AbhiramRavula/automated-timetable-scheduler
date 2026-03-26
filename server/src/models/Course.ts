@@ -11,6 +11,7 @@ export interface ICourse extends Document {
   preferredRoomTypes: string[];
   priority: "core" | "elective";
   mustNotClashWith: string[];
+  requiredRoomTag?: string;
 }
 
 const CourseSchema: Schema = new Schema({
@@ -32,6 +33,7 @@ const CourseSchema: Schema = new Schema({
     default: "core",
   },
   mustNotClashWith: [{ type: String }],
+  requiredRoomTag: { type: String },
 });
 
 export default mongoose.model<ICourse>("Course", CourseSchema);

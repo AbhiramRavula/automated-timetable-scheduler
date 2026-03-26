@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { realMockData } from "../realMockData";
 import { TimetableDisplay } from "../components/TimetableDisplay";
 import { getTimetables, deleteTimetable } from "../api";
+import FacultyWorkloadTable from "../components/FacultyWorkloadTable";
 
 const timeSlots = [
   { name: "Period 1", startTime: "9.40am",  endTime: "10.40am" },
@@ -93,6 +94,7 @@ interface Generation {
   createdAt: string;
   isSeeded: boolean;
   timetables: any[];
+  workload?: any[];
   department?: string;
   academic_year?: string;
 }
@@ -104,6 +106,7 @@ export function TimetablesPage() {
   const [activeTabs, setActiveTabs] = useState<Record<string, number>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [showStatsId, setShowStatsId] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
 
   useEffect(() => { fetchAll(); }, []);
@@ -124,6 +127,7 @@ export function TimetablesPage() {
               : "Date unknown",
             isSeeded,
             timetables: tts.length > 0 ? tts : realMockData.timetables,
+            workload: doc.workload || [],
             department: doc.grid?.department,
             academic_year: doc.grid?.academic_year,
           };
@@ -269,6 +273,16 @@ export function TimetablesPage() {
                 >
                   {deletingId === gen.id ? "Deleting…" : "🗑️ Delete"}
                 </button>
+                <button
+                  onClick={() => setShowStatsId(showStatsId === gen.id ? null : gen.id)}
+                  className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
+                    showStatsId === gen.id 
+                      ? "bg-indigo-600 text-white" 
+                      : "bg-slate-600 hover:bg-slate-500 text-white"
+                  }`}
+                >
+                  {showStatsId === gen.id ? "📊 Hide Stats" : "📊 View Stats"}
+                </button>
               </div>
             </div>
 
@@ -289,11 +303,15 @@ export function TimetablesPage() {
               ))}
             </div>
 
-            {/* Timetable display */}
+            {/* Timetable/Stats display */}
             <div className="p-4" id={`gen-${gen.id}`}>
-              {activeTT ? (
+              {showStatsId === gen.id ? (
+                <div className="bg-slate-900 rounded-lg p-4">
+                  <FacultyWorkloadTable data={gen.workload || []} />
+                </div>
+              ) : activeTT ? (
                 <TimetableDisplay
-                  key={`${gen.id}-${activeIdx}`} // Ensure state resets on tab/gen change
+                  key={`${gen.id}-${activeIdx}`} 
                   timetable={{
                     id: `${gen.id}-${activeIdx}`,
                     class: activeTT.class || activeTT.name || "Unknown",

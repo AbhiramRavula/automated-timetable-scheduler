@@ -14,6 +14,7 @@ export interface ITimetable extends Document {
   grid: any;
   constraintsSnapshot: any;
   metrics: ITimetableMetrics;
+  workload: any[];
   createdAt: Date;
 }
 
@@ -29,6 +30,7 @@ const TimetableSchema: Schema = new Schema({
     balanceScore: { type: Number, default: 0 },
     softScore: { type: Number, default: 0 },
   },
+  workload: [{ type: Schema.Types.Mixed }],
   createdAt: { type: Date, default: Date.now },
 });
 

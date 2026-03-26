@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { generateTimetables, getBatches, getFaculty, getRooms, getSubjects } from "../api";
 import { TimetableDisplay } from "../components/TimetableDisplay";
+import FacultyWorkloadTable, { FacultyWorkload } from "../components/FacultyWorkloadTable";
 const timeSlots = [
   { name: "Period 1", startTime: "9.40am",  endTime: "10.40am" },
   { name: "Period 2", startTime: "10:40am", endTime: "11:40am" },
@@ -34,6 +35,7 @@ export function GeneratePage() {
   const [rooms, setRooms] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [results, setResults] = useState<any[]>([]);
+  const [workload, setWorkload] = useState<FacultyWorkload[]>([]);
   const [status, setStatus] = useState<string>("");
 
   useEffect(() => {
@@ -81,6 +83,7 @@ export function GeneratePage() {
         setStatus("Success! Timetables generated.");
       }
       setResults(result.timetables || []);
+      setWorkload(result.workload || []);
     } catch (err: any) {
       setStatus(`Error: ${err.message}`);
       alert("Generation failed: " + err.message);
@@ -159,6 +162,12 @@ export function GeneratePage() {
             <h2 className="text-2xl font-bold text-slate-50">Generated Results</h2>
             <p className="text-slate-400 text-sm">{results.length} batches processed</p>
           </div>
+
+          {workload.length > 0 && (
+            <div className="bg-slate-800 p-2 rounded-xl border border-slate-700 overflow-hidden shadow-2xl">
+               <FacultyWorkloadTable data={workload} />
+            </div>
+          )}
           
           <div className="grid grid-cols-1 gap-12">
             {results.map((tt, idx) => (
