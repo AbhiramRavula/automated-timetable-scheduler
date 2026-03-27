@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty } from "../api";
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getTimetables } from "../api";
+import { FacultyWorkload } from "../components/FacultyWorkloadTable";
 
 interface Faculty {
   _id?: string;
@@ -19,6 +20,7 @@ export function FacultyPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Faculty | null>(null);
+  const [workloadMap, setWorkloadMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     loadData();
@@ -26,8 +28,20 @@ export function FacultyPage() {
 
   const loadData = async () => {
     try {
-      const data = await getFaculty();
-      setFaculty(data);
+      const [facData, schedules] = await Promise.all([
+        getFaculty(),
+        getTimetables()
+      ]);
+      setFaculty(facData);
+      
+      if (schedules && schedules.length > 0) {
+        const latest = schedules[0];
+        const map: Record<string, number> = {};
+        (latest.workload || []).forEach((w: any) => {
+          map[w.teacherCode] = w.totalHours;
+        });
+        setWorkloadMap(map);
+      }
     } catch (err) {
       console.error("Failed to load faculty", err);
     } finally {
@@ -262,6 +276,9 @@ export function FacultyPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Designation
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Weekly Load
+                </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
                   Actions
                 </th>
@@ -340,6 +357,15 @@ export function FacultyPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
                         {f.designation}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          (workloadMap[f.code] || 0) > 18 ? 'bg-red-900/40 text-red-400' : 
+                          (workloadMap[f.code] || 0) > 0 ? 'bg-green-900/40 text-green-400' :
+                          'bg-slate-700 text-slate-500'
+                        }`}>
+                          {workloadMap[f.code] ? `${workloadMap[f.code].toFixed(1)} Hrs` : 'No Load'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button

@@ -3,6 +3,7 @@ import { ScheduleEvent } from "./scheduler";
 export interface FacultyWorkload {
   teacherCode: string;
   teacherName: string;
+  teacherDesignation?: string;
   theoryCourses: { code: string; name: string; batch: string; sessions: number }[];
   labCourses: { code: string; name: string; batch: string; sessions: number }[];
   totalSessions: number;
@@ -18,6 +19,7 @@ export class WorkloadAnalyzer {
       workloadMap.set(t.code || t.id, {
         teacherCode: t.code || t.id,
         teacherName: t.name,
+        teacherDesignation: t.designation || t.role || "Faculty",
         theoryCourses: [],
         labCourses: [],
         totalSessions: 0,

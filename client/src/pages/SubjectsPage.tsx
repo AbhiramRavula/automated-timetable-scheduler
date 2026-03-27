@@ -12,6 +12,7 @@ interface Subject {
   batch: string;
   preferredRoomTypes: string[];
   priority: "core" | "elective";
+  requiredRoomTag?: string;
 }
 
 export function SubjectsPage() {
@@ -80,7 +81,8 @@ export function SubjectsPage() {
       teacherCodes: [],
       batch: batches[0]?.name || "Default",
       preferredRoomTypes: ["lecture"],
-      priority: "core"
+      priority: "core",
+      requiredRoomTag: ""
     });
   };
 
@@ -211,6 +213,16 @@ export function SubjectsPage() {
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Required Room Tag (Optional)</label>
+              <input
+                type="text"
+                value={editForm.requiredRoomTag || ""}
+                onChange={(e) => setEditForm({ ...editForm, requiredRoomTag: e.target.value.toUpperCase() })}
+                placeholder="e.g. AI-LAB"
+                className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100"
+              />
+            </div>
           </div>
 
           <div className="mt-6">
@@ -281,6 +293,9 @@ export function SubjectsPage() {
                     }`}>
                       {s.type}
                     </span>
+                    {s.requiredRoomTag && (
+                      <div className="text-[10px] text-orange-400 mt-1">Tag: {s.requiredRoomTag}</div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-300">
                     {s.sessionsPerWeek} sessions × {s.durationSlots} slot

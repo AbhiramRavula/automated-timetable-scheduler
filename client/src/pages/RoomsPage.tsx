@@ -9,6 +9,7 @@ interface Room {
   building?: string;
   floor?: string;
   facilities?: string[];
+  tags?: string[];
 }
 
 export function RoomsPage() {
@@ -64,7 +65,8 @@ export function RoomsPage() {
       type: "lecture",
       building: "Main Block",
       floor: "3rd Floor",
-      facilities: []
+      facilities: [],
+      tags: []
     });
   };
 
@@ -167,6 +169,16 @@ export function RoomsPage() {
                 placeholder="3rd Floor"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Room Tags (Comma separated)</label>
+              <input
+                type="text"
+                value={editForm.tags?.join(", ") || ""}
+                onChange={(e) => setEditForm({ ...editForm, tags: e.target.value.split(",").map(s => s.trim()).filter(s => s) })}
+                className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500"
+                placeholder="AI-LAB, PYTHON-LAB, CSE"
+              />
+            </div>
           </div>
           <div className="flex gap-3 mt-4">
             <button
@@ -222,6 +234,15 @@ export function RoomsPage() {
                     <option value="seminar">Seminar Hall</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Tags (Comma separated)</label>
+                  <input
+                    type="text"
+                    value={editForm.tags?.join(", ") || ""}
+                    onChange={(e) => setEditForm({ ...editForm, tags: e.target.value.split(",").map(s => s.trim()).filter(s => s) })}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleSave}
@@ -270,9 +291,17 @@ export function RoomsPage() {
                     </div>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-slate-400">Status</span>
                     <span className="text-sm text-green-400">Available</span>
                   </div>
+                  {room.tags && room.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                       {room.tags.map(tag => (
+                         <span key={tag} className="px-1.5 py-0.5 bg-blue-900/30 text-blue-400 text-[10px] rounded border border-blue-800">
+                           {tag}
+                         </span>
+                       ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => handleEdit(room)}

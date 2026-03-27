@@ -3,6 +3,7 @@ import React from 'react';
 export interface FacultyWorkload {
   teacherCode: string;
   teacherName: string;
+  teacherDesignation?: string;
   theoryCourses: { code: string; name: string; batch: string; sessions: number }[];
   labCourses: { code: string; name: string; batch: string; sessions: number }[];
   totalSessions: number;
@@ -32,13 +33,16 @@ const FacultyWorkloadTable: React.FC<Props> = ({ data }) => {
               Name of the Faculty
             </th>
             <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+              Designation
+            </th>
+            <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
               Theory (Sessions)
             </th>
             <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
               Lab (Sessions)
             </th>
             <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-              Total Load
+              Weekly Load (Hrs)
             </th>
           </tr>
         </thead>
@@ -51,6 +55,9 @@ const FacultyWorkloadTable: React.FC<Props> = ({ data }) => {
               <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                 <div className="font-medium text-gray-900">{faculty.teacherName}</div>
                 <div className="text-xs text-gray-400">{faculty.teacherCode}</div>
+              </td>
+              <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                {faculty.teacherDesignation}
               </td>
               <td className="px-3 py-4 text-sm text-gray-500">
                 {faculty.theoryCourses.map((c, i) => (
