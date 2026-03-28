@@ -27,20 +27,36 @@ export class WorkloadAnalyzer {
       });
     });
 
-    // Aggregate sessions from events
+    // Aggregate periods from events
+    const normalize = (s: string) => s?.trim().toUpperCase();
+
     events.forEach(event => {
-      event.teacherCodes.forEach(tc => {
-        const stats = workloadMap.get(tc);
+      // Use teacherCodes if present, else fallback to teacherCode (for older data)
+      const tcs = Array.isArray(event.teacherCodes) && event.teacherCodes.length > 0
+        ? event.teacherCodes
+        : ((event as any).teacherCode ? [(event as any).teacherCode] : []);
+
+      tcs.forEach(tc => {
+        const normTc = normalize(tc);
+        // Find in map using normalized codes
+        let stats: FacultyWorkload | undefined;
+        for (const [key, value] of workloadMap.entries()) {
+           if (normalize(key) === normTc) {
+             stats = value;
+             break;
+           }
+        }
+        
         if (!stats) return;
-
-        const course = courses.find(c => c.code === event.courseCode);
+ 
+        const course = courses.find(c => normalize(c.code) === normalize(event.courseCode));
         if (!course) return;
-
+ 
         const isLab = course.type === "lab";
         const targetList = isLab ? stats.labCourses : stats.theoryCourses;
-
+ 
         // Check if course+batch already in list
-        const existing = targetList.find(c => c.code === event.courseCode && c.batch === event.batch);
+        const existing = targetList.find(c => normalize(c.code) === normalize(event.courseCode) && normalize(c.batch) === normalize(event.batch));
         if (existing) {
           existing.periods += event.duration;
         } else {
@@ -51,9 +67,9 @@ export class WorkloadAnalyzer {
             periods: event.duration
           });
         }
-
+ 
         stats.totalPeriods += event.duration;
-        stats.totalHours += event.duration * 1; // Assuming 1 hour per period to match timeSlots
+        stats.totalHours += event.duration * 1; 
       });
     });
 

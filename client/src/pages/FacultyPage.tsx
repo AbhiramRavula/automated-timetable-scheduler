@@ -38,7 +38,7 @@ export function FacultyPage() {
         const latest = schedules[0];
         const map: Record<string, number> = {};
         (latest.workload || []).forEach((w: any) => {
-          map[w.teacherCode] = w.totalHours;
+          map[w.teacherCode.toUpperCase()] = w.totalHours;
         });
         setWorkloadMap(map);
       }
@@ -360,11 +360,11 @@ export function FacultyPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          (workloadMap[f.code] || 0) > 18 ? 'bg-red-900/40 text-red-400' : 
-                          (workloadMap[f.code] || 0) > 0 ? 'bg-green-900/40 text-green-400' :
+                          (workloadMap[f.code.toUpperCase()] || 0) > 18 ? 'bg-red-900/40 text-red-400' : 
+                          (workloadMap[f.code.toUpperCase()] || 0) > 0 ? 'bg-green-900/40 text-green-400' :
                           'bg-slate-700 text-slate-500'
                         }`}>
-                          {workloadMap[f.code] ? `${workloadMap[f.code].toFixed(1)} Hrs` : 'No Load'}
+                          {workloadMap[f.code.toUpperCase()] ? `${workloadMap[f.code.toUpperCase()].toFixed(1)} Hrs` : 'No Load'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

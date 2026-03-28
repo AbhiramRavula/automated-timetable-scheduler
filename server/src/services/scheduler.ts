@@ -232,7 +232,13 @@ export class TimetableScheduler {
     rooms: Room[],
     maxIterations: number = 1000
   ) {
-    this.courses = courses;
+    // Normalize teacher codes - some might have teacherCode (string) while others have teacherCodes (array)
+    this.courses = courses.map(c => ({
+      ...c,
+      teacherCodes: Array.isArray(c.teacherCodes) && c.teacherCodes.length > 0 
+        ? c.teacherCodes 
+        : ((c as any).teacherCode ? [(c as any).teacherCode] : [])
+    }));
     this.teachers = teachers;
     this.rooms = rooms;
     this.maxIterations = maxIterations;
