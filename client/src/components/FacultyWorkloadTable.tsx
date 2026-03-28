@@ -4,9 +4,9 @@ export interface FacultyWorkload {
   teacherCode: string;
   teacherName: string;
   teacherDesignation?: string;
-  theoryCourses: { code: string; name: string; batch: string; sessions: number }[];
-  labCourses: { code: string; name: string; batch: string; sessions: number }[];
-  totalSessions: number;
+  theoryCourses: { code: string; name: string; batch: string; periods: number }[];
+  labCourses: { code: string; name: string; batch: string; periods: number }[];
+  totalPeriods: number;
   totalHours: number;
 }
 
@@ -36,10 +36,10 @@ const FacultyWorkloadTable: React.FC<Props> = ({ data }) => {
               Designation
             </th>
             <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-              Theory (Sessions)
+              Theory (Periods)
             </th>
             <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-              Lab (Sessions)
+              Lab (Periods)
             </th>
             <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
               Weekly Load (Hrs)
@@ -63,7 +63,7 @@ const FacultyWorkloadTable: React.FC<Props> = ({ data }) => {
                 {faculty.theoryCourses.map((c, i) => (
                   <div key={i} className="mb-1">
                     <span className="font-semibold text-indigo-600">{c.code}</span>
-                    <span className="text-xs ml-1">({c.sessions}) {c.batch}</span>
+                    <span className="text-xs ml-1">({c.periods} per.) {c.batch}</span>
                   </div>
                 ))}
               </td>
@@ -71,7 +71,7 @@ const FacultyWorkloadTable: React.FC<Props> = ({ data }) => {
                 {faculty.labCourses.map((c, i) => (
                   <div key={i} className="mb-1">
                     <span className="font-semibold text-green-600">{c.code}</span>
-                    <span className="text-xs ml-1">({c.sessions}) {c.batch}</span>
+                    <span className="text-xs ml-1">({c.periods} per.) {c.batch}</span>
                   </div>
                 ))}
               </td>

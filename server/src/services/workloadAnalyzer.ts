@@ -4,9 +4,9 @@ export interface FacultyWorkload {
   teacherCode: string;
   teacherName: string;
   teacherDesignation?: string;
-  theoryCourses: { code: string; name: string; batch: string; sessions: number }[];
-  labCourses: { code: string; name: string; batch: string; sessions: number }[];
-  totalSessions: number;
+  theoryCourses: { code: string; name: string; batch: string; periods: number }[];
+  labCourses: { code: string; name: string; batch: string; periods: number }[];
+  totalPeriods: number;
   totalHours: number;
 }
 
@@ -22,7 +22,7 @@ export class WorkloadAnalyzer {
         teacherDesignation: t.designation || t.role || "Faculty",
         theoryCourses: [],
         labCourses: [],
-        totalSessions: 0,
+        totalPeriods: 0,
         totalHours: 0
       });
     });
@@ -42,18 +42,18 @@ export class WorkloadAnalyzer {
         // Check if course+batch already in list
         const existing = targetList.find(c => c.code === event.courseCode && c.batch === event.batch);
         if (existing) {
-          existing.sessions += 1;
+          existing.periods += event.duration;
         } else {
           targetList.push({
             code: event.courseCode,
             name: course.name,
             batch: event.batch,
-            sessions: 1
+            periods: event.duration
           });
         }
 
-        stats.totalSessions += 1;
-        stats.totalHours += (event.duration * 50) / 60; // Assuming 50 mins per slot
+        stats.totalPeriods += event.duration;
+        stats.totalHours += event.duration * 1; // Assuming 1 hour per period to match timeSlots
       });
     });
 
