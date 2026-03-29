@@ -15,6 +15,7 @@ export interface ITimetable extends Document {
   constraintsSnapshot: any;
   metrics: ITimetableMetrics;
   workload: any[];
+  institutionId: mongoose.Types.ObjectId;
   createdAt: Date;
 }
 
@@ -31,6 +32,7 @@ const TimetableSchema: Schema = new Schema({
     softScore: { type: Number, default: 0 },
   },
   workload: [{ type: Schema.Types.Mixed }],
+  institutionId: { type: Schema.Types.ObjectId, ref: "Institution", required: true },
   createdAt: { type: Date, default: Date.now },
 });
 

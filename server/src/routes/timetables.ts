@@ -1,25 +1,29 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import Timetable from "../models/Timetable";
 import { parseConstraints, proposeSchedule } from "../services/llmService";
 import { validateAndScore } from "../services/validator";
 import { WorkloadAnalyzer } from "../services/workloadAnalyzer";
+import { RequestWithInstitution } from "../middleware/institutionMiddleware";
 
 const router = Router();
 
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const timetables = await Timetable.find().sort({ createdAt: -1 });
+    const timetables = await Timetable.find({ institutionId }).sort({ createdAt: -1 });
     res.json(timetables);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch timetables" });
   }
 });
 
-router.post("/generate", async (req: Request, res: Response) => {
+router.post("/generate", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
     const { courses, teachers, rooms, constraintsText, batches, metadata } = req.body;
 
     console.log("📝 Received request to generate timetable");
+    console.log("Institution ID:", institutionId);
     console.log("Courses:", courses?.length || 0);
     console.log("Teachers:", teachers?.length || 0);
     console.log("Rooms:", rooms?.length || 0);
@@ -57,7 +61,6 @@ router.post("/generate", async (req: Request, res: Response) => {
         limitReached = true;
         console.warn("⚠️ AI Limit reached during schedule proposal, using fallback");
         const { proposeSchedule: fallbackPropose } = require("../services/llmService");
-        // Passing null model context via service to trigger fallback inside service
         rawSchedule = await fallbackPropose({ courses, teachers, rooms, constraints: [], batches });
       } else {
         throw err;
@@ -103,7 +106,6 @@ router.post("/generate", async (req: Request, res: Response) => {
         };
       }
       
-      // Use the original course code from database if possible (fuzzy match)
       const normalizedCode = normalize(event.courseCode);
       const matchedCourse = courseMap[normalizedCode];
       const displayCode = matchedCourse ? matchedCourse.code : event.courseCode;
@@ -117,7 +119,6 @@ router.post("/generate", async (req: Request, res: Response) => {
         
         timetablesByBatch[batch].schedule[dayName][event.slot] = eventObj;
         
-        // Mark subsequent slots as occupied
         if (event.duration > 1) {
           for (let i = 1; i < event.duration; i++) {
             timetablesByBatch[batch].schedule[dayName][event.slot + i] = "OCCUPIED";
@@ -126,17 +127,13 @@ router.post("/generate", async (req: Request, res: Response) => {
       }
     }
 
-    // Build a teacher lookup: teacherCode → name
     const teacherLookup: Record<string, string> = {};
     (teachers || []).forEach((t: any) => {
       teacherLookup[t.code || t.id || t.name] = t.name;
     });
 
-    // Inject faculty_mapping and LUNCH slot into each batch
     for (const batchName of Object.keys(timetablesByBatch)) {
       const batchObj = timetablesByBatch[batchName];
-
-      // Collect all subjects that were actually scheduled in this batch
       const scheduledInThisBatch = new Set<string>();
       Object.values(batchObj.schedule).forEach((row: any) => {
         row.forEach((slot: any) => {
@@ -145,15 +142,7 @@ router.post("/generate", async (req: Request, res: Response) => {
         });
       });
 
-      // Build faculty_mapping: include all courses assigned to this batch
       const batchCourses = (courses || []).filter((c: any) => normalize(c.batch) === normalize(batchName));
-      
-      console.log(`[DEBUG] Batch: "${batchName}" (normalized: "${normalize(batchName)}")`);
-      console.log(`[DEBUG] Found ${batchCourses.length} subjects for this batch.`);
-      if (batchCourses.length < 5 && courses && courses.length > 0) {
-        console.log(`[DEBUG] First course batch in DB: "${courses[0].batch}" (normalized: "${normalize(courses[0].batch)}")`);
-      }
-
       const batchFacultyMapping: any[] = [];
       
       batchCourses.forEach((c: any) => {
@@ -166,10 +155,8 @@ router.post("/generate", async (req: Request, res: Response) => {
         });
       });
 
-      // Also add any other subjects that were actually scheduled (like LIB, SPORTS, or hallucinations)
       scheduledInThisBatch.forEach(normCode => {
         if (!batchFacultyMapping.some(fm => normalize(fm.code) === normCode)) {
-          // Fuzzy match: check if normCode starts with or is part of any course code in the entire list
           const fuzzyMatch = (courses || []).find((c: any) => 
             normalize(c.code).includes(normCode) || normCode.includes(normalize(c.code))
           );
@@ -195,7 +182,6 @@ router.post("/generate", async (req: Request, res: Response) => {
 
       batchObj.faculty_mapping = batchFacultyMapping;
 
-      // Add LUNCH slot at index 4 for every day that has at least one event
       for (const day of Object.keys(batchObj.schedule)) {
         const row: (string | null)[] = batchObj.schedule[day];
         if (row.some((v: any) => v !== null)) {
@@ -204,13 +190,9 @@ router.post("/generate", async (req: Request, res: Response) => {
       }
     }
 
-    // Convert to array
     const timetables = Object.values(timetablesByBatch);
-
-    // Aggregate workload for all teachers
     const workload = WorkloadAnalyzer.getWorkload(result.events as any, teachers, courses);
 
-    // Persist to MongoDB
     const persistedTimetable = new Timetable({
       courses: courses || [],
       teachers: teachers || [],
@@ -219,6 +201,7 @@ router.post("/generate", async (req: Request, res: Response) => {
       constraintsSnapshot: constraints,
       metrics: result.metrics,
       workload: workload,
+      institutionId: institutionId,
       metadata: { ...metadata, limitReached }
     });
 
@@ -234,8 +217,7 @@ router.post("/generate", async (req: Request, res: Response) => {
       workload: workload
     });
   } catch (err: any) {
-    console.error("❌ Error generating timetable:");
-    console.error(err.message);
+    console.error("❌ Error generating timetable:", err.message);
     return res.status(500).json({ 
       error: "Failed to generate timetable",
       details: err.message 
@@ -243,66 +225,61 @@ router.post("/generate", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/validate", async (req: Request, res: Response) => {
+router.post("/validate", async (req: RequestWithInstitution, res: Response) => {
   try {
-    // TODO: run validator on client-edited timetable
-    // const { timetable } = req.body;
     return res.json({ message: "validate placeholder" });
   } catch (error) {
     return res.status(500).json({ error: "Failed to validate timetable" });
   }
 });
 
-router.get("/:id", async (req: Request, res: Response) => {
+router.get("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    // TODO: fetch timetable by id
-    const { id } = req.params;
-    const timetable = await Timetable.findById(id);
-    
+    const timetable = await Timetable.findOne({ _id: req.params.id, institutionId });
     if (!timetable) {
-      return res.status(404).json({ error: "Timetable not found" });
+      return res.status(404).json({ error: "Timetable not found in this institution" });
     }
-    
     return res.json(timetable);
   } catch (error) {
     return res.status(500).json({ error: "Failed to fetch timetable" });
   }
 });
 
-router.get("/:id/metrics", async (req: Request, res: Response) => {
+router.get("/:id/metrics", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    // TODO: return stored metrics
-    const { id } = req.params;
-    const timetable = await Timetable.findById(id);
-    
+    const timetable = await Timetable.findOne({ _id: req.params.id, institutionId });
     if (!timetable) {
-      return res.status(404).json({ error: "Timetable not found" });
+      return res.status(404).json({ error: "Timetable not found in this institution" });
     }
-    
     return res.json({ metrics: timetable.metrics });
   } catch (error) {
     return res.status(500).json({ error: "Failed to fetch metrics" });
   }
 });
 
-router.patch("/:id", async (req: Request, res: Response) => {
+router.patch("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const { id } = req.params;
-    const updates = req.body; // e.g. { label, grid }
-    const timetable = await Timetable.findByIdAndUpdate(id, updates, { new: true });
-    if (!timetable) return res.status(404).json({ error: "Timetable not found" });
+    const timetable = await Timetable.findOneAndUpdate(
+      { _id: req.params.id, institutionId },
+      req.body,
+      { new: true }
+    );
+    if (!timetable) return res.status(404).json({ error: "Timetable not found in this institution" });
     return res.json(timetable);
   } catch (error) {
     return res.status(500).json({ error: "Failed to update timetable" });
   }
 });
 
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const { id } = req.params;
-    const deleted = await Timetable.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ error: "Timetable not found" });
-    return res.json({ success: true, id });
+    const deleted = await Timetable.findOneAndDelete({ _id: req.params.id, institutionId });
+    if (!deleted) return res.status(404).json({ error: "Timetable not found in this institution" });
+    return res.json({ success: true, id: req.params.id });
   } catch (error) {
     return res.status(500).json({ error: "Failed to delete timetable" });
   }

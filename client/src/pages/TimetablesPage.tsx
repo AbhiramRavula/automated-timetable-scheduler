@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { realMockData } from "../realMockData";
 import { TimetableDisplay } from "../components/TimetableDisplay";
 import { getTimetables, deleteTimetable } from "../api";
+import { useInstitution } from "../context/InstitutionContext";
 import FacultyWorkloadTable from "../components/FacultyWorkloadTable";
 
 const timeSlots = [
@@ -14,7 +15,6 @@ const timeSlots = [
   { name: "Period 7", startTime: "3:10pm",  endTime: "4:10pm"  },
 ];
 
-/** Build faculty_mapping from doc-level courses + teachers arrays (fallback for older generated docs) */
 function buildFacultyMapping(
   courses: any[],
   teachers: any[]
@@ -31,41 +31,28 @@ function buildFacultyMapping(
   }));
 }
 
-/** Normalise a raw MongoDB Timetable document into a flat array of class timetables */
 function normaliseDoc(doc: any): any[] {
   const grid = doc.grid || {};
-
-  // Seeded format: grid.timetables = [{class, schedule, ...}]
   if (Array.isArray(grid.timetables) && grid.timetables.length > 0) {
     return grid.timetables;
   }
-
-  // Generated format: grid = { batchName: {class, schedule, faculty_mapping?, ...} }
   const fallbackMapping = buildFacultyMapping(doc.courses || [], doc.teachers || []);
-
   const fromGrid = (Object.values(grid) as any[]).filter(
     (v: any) => v && typeof v === "object" && !Array.isArray(v) && v.schedule
   );
-
   return fromGrid.map((tt: any) => ({
     ...tt,
-    // Flatten OCCUPIED placeholders — replace them with empty string so they don't appear as text
     schedule: Object.fromEntries(
       Object.entries(tt.schedule || {}).map(([day, cells]) => [
         day,
         (cells as any[]).map((c: any) => {
           if (c === "OCCUPIED") return null;
-          if (c && typeof c === "object") return c; // preserve { subject, room, span } so room numbers render
+          if (c && typeof c === "object") return c;
           return c;
         }),
       ])
     ),
-    // Use per-batch faculty_mapping if present, else fall back to doc-level
-    faculty_mapping:
-      Array.isArray(tt.faculty_mapping) && tt.faculty_mapping.length > 0
-        ? tt.faculty_mapping
-        : fallbackMapping,
-    // Normalise field names from generated format → seeded format
+    faculty_mapping: Array.isArray(tt.faculty_mapping) && tt.faculty_mapping.length > 0 ? tt.faculty_mapping : fallbackMapping,
     class: tt.class || tt.name || "Unknown Batch",
     room_no: tt.room_no || tt.room || "",
     effective_date: tt.effective_date || tt.wef || tt.date || new Date().toLocaleDateString("en-GB"),
@@ -100,16 +87,20 @@ interface Generation {
 }
 
 export function TimetablesPage() {
+  const { activeInstitution } = useInstitution();
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [loading, setLoading] = useState(true);
-  // per‑generation active batch tab
   const [activeTabs, setActiveTabs] = useState<Record<string, number>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [showStatsId, setShowStatsId] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState("");
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { 
+    if (activeInstitution) {
+      fetchAll(); 
+    }
+  }, [activeInstitution]);
 
   const fetchAll = async () => {
     try {
@@ -121,12 +112,10 @@ export function TimetablesPage() {
           const isSeeded = doc.grid?.source === "seed";
           return {
             id: doc._id || String(idx),
-            label: isSeeded ? "📋 Current Department Timetables" : `🤖 AI Generation #${data.length - idx}`,
-            createdAt: doc.createdAt
-              ? new Date(doc.createdAt).toLocaleString("en-IN")
-              : "Date unknown",
+            label: doc.label || (isSeeded ? "📋 Current Production Schedule" : `🤖 AI Synthesis #${data.length - idx}`),
+            createdAt: doc.createdAt ? new Date(doc.createdAt).toLocaleString("en-IN") : "Date unknown",
             isSeeded,
-            timetables: tts.length > 0 ? tts : realMockData.timetables,
+            timetables: tts,
             workload: doc.workload || [],
             department: doc.grid?.department,
             academic_year: doc.grid?.academic_year,
@@ -134,50 +123,27 @@ export function TimetablesPage() {
         });
         setGenerations(gens);
       } else {
-        // Fallback: show the local mock data as the first generation
-        setGenerations([{
-          id: "local",
-          label: "📋 Current Department Timetables",
-          createdAt: "Loaded from local data",
-          isSeeded: true,
-          timetables: realMockData.timetables,
-          department: realMockData.department,
-          academic_year: realMockData.academic_year,
-        }]);
+        setGenerations([]);
       }
     } catch (err) {
       console.error("Failed to fetch timetables:", err);
-      setGenerations([{
-        id: "local",
-        label: "📋 Current Department Timetables",
-        createdAt: "Loaded from local data",
-        isSeeded: true,
-        timetables: realMockData.timetables,
-        department: realMockData.department,
-        academic_year: realMockData.academic_year,
-      }]);
+      setGenerations([]);
     } finally {
       setLoading(false);
     }
   };
 
   const getTab = (genId: string) => activeTabs[genId] ?? 0;
-  const setTab = (genId: string, idx: number) =>
-    setActiveTabs((prev) => ({ ...prev, [genId]: idx }));
+  const setTab = (genId: string, idx: number) => setActiveTabs((prev) => ({ ...prev, [genId]: idx }));
 
   const handleDelete = async (gen: Generation) => {
-    if (!window.confirm(`Delete "${gen.label}"? This cannot be undone.`)) return;
-    // Local-only fallback generations have no real DB id
-    if (gen.id === "local") {
-      setGenerations((prev) => prev.filter((g) => g.id !== gen.id));
-      return;
-    }
+    if (!window.confirm(`Permanently wipe "${gen.label}" from this profile?`)) return;
     try {
       setDeletingId(gen.id);
       await deleteTimetable(gen.id);
       setGenerations((prev) => prev.filter((g) => g.id !== gen.id));
     } catch (err) {
-      alert("Failed to delete. Please try again.");
+      alert("System failed to purge record.");
     } finally {
       setDeletingId(null);
     }
@@ -189,156 +155,125 @@ export function TimetablesPage() {
   };
 
   const handleRenameSave = (genId: string) => {
-    setGenerations((prev) =>
-      prev.map((g) => (g.id === genId ? { ...g, label: labelDraft } : g))
-    );
+    setGenerations((prev) => prev.map((g) => (g.id === genId ? { ...g, label: labelDraft } : g)));
     setEditingLabelId(null);
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 space-y-4">
-        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-slate-400 animate-pulse">Fetching timetables from cloud...</p>
-      </div>
-    );
-  }
+  if (!activeInstitution) return <div className="p-8 text-center text-slate-400 font-black uppercase tracking-[0.2em]">Select Profile to view archives</div>;
 
-  if (generations.length === 0) {
-    return (
-      <div className="bg-slate-800 p-12 rounded-xl border border-slate-700 text-center">
-        <h2 className="text-2xl font-bold text-slate-50 mb-4">No Timetables Yet</h2>
-        <p className="text-slate-400">Go to the Generate page to create your first schedule.</p>
-      </div>
-    );
+  if (loading) {
+     return (
+       <div className="flex flex-col items-center justify-center py-24 space-y-6">
+         <div className="w-16 h-16 border-8 border-blue-600/20 border-t-blue-500 rounded-full animate-spin"></div>
+         <p className="text-xs font-black text-slate-500 uppercase tracking-widest animate-pulse">Synchronizing Schedules...</p>
+       </div>
+     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Page header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-10">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-6">
         <div>
-          <h1 className="text-3xl font-bold text-slate-50 mb-1">Timetables</h1>
-          <p className="text-slate-400 text-sm">{generations.length} generation{generations.length !== 1 ? "s" : ""} available</p>
+          <h1 className="text-4xl font-black text-slate-50 mb-1 uppercase tracking-tight">Timeline Archives</h1>
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+            <span className="text-blue-400">{activeInstitution.name}</span> • {generations.length} Active Records
+          </p>
         </div>
       </div>
 
-      {/* One card per generation — newest first */}
-      {generations.map((gen) => {
-        const activeIdx = getTab(gen.id);
-        const activeTT = gen.timetables[activeIdx];
+      {generations.length === 0 ? (
+        <div className="bg-slate-900 border border-dashed border-slate-800 p-24 rounded-3xl text-center">
+          <span className="text-6xl mb-6 block opacity-20">🗄️</span>
+          <h2 className="text-xl font-bold text-slate-400 mb-2 uppercase">No records found</h2>
+          <p className="text-sm text-slate-600 mb-8 lowercase tracking-tighter">no synthesis history detected for this profile context</p>
+          <button className="bg-blue-600/10 text-blue-400 border border-blue-600/30 px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Initialize Generation</button>
+        </div>
+      ) : (
+        <div className="space-y-12">
+          {generations.map((gen) => {
+            const activeIdx = getTab(gen.id);
+            const activeTT = gen.timetables[activeIdx];
 
-        return (
-          <div key={gen.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            {/* Generation header */}
-            <div className={`flex items-center justify-between px-5 py-3 ${gen.isSeeded ? "bg-slate-700" : "bg-blue-900/40"}`}>
-              {/* Label (or rename input) */}
-              <div className="flex flex-col gap-0.5">
-                {editingLabelId === gen.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      autoFocus
-                      value={labelDraft}
-                      onChange={(e) => setLabelDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleRenameSave(gen.id)}
-                      className="bg-slate-600 border border-blue-400 text-white text-sm rounded px-2 py-0.5 outline-none"
-                    />
-                    <button onClick={() => handleRenameSave(gen.id)} className="text-green-400 text-xs hover:text-green-300">✓ Save</button>
-                    <button onClick={() => setEditingLabelId(null)} className="text-slate-400 text-xs hover:text-slate-300">✕</button>
+            return (
+              <div key={gen.id} className="bg-slate-900/50 rounded-3xl border border-slate-800 overflow-hidden shadow-2xl transition-all hover:border-slate-700">
+                <div className={`flex items-center justify-between px-8 py-4 ${gen.isSeeded ? "bg-slate-800/80" : "bg-blue-950/20"}`}>
+                  <div>
+                    {editingLabelId === gen.id ? (
+                      <div className="flex items-center gap-3">
+                        <input
+                          autoFocus
+                          value={labelDraft}
+                          onChange={(e) => setLabelDraft(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleRenameSave(gen.id)}
+                          className="bg-slate-950 border border-blue-500/50 text-white text-sm rounded-lg px-4 py-1 outline-none font-bold"
+                        />
+                        <button onClick={() => handleRenameSave(gen.id)} className="text-green-400 font-black text-[10px] uppercase">Save</button>
+                      </div>
+                    ) : (
+                      <h3 className="font-black text-slate-200 uppercase tracking-wide flex items-center gap-3">
+                         <span className="text-xl">{gen.isSeeded ? '📋' : '🤖'}</span>
+                         {gen.label}
+                      </h3>
+                    )}
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{gen.createdAt}</span>
+                      {gen.department && (
+                        <span className="text-[10px] font-black text-blue-500/50 uppercase tracking-tighter px-2 border-l border-slate-800">{gen.department}</span>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <span className="font-semibold text-slate-100">{gen.label}</span>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">{gen.createdAt}</span>
-                  {gen.department && (
-                    <span className="text-xs text-slate-500">{gen.department} • {gen.academic_year}</span>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => handleRenameStart(gen)} className="p-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs transition-all shadow-lg border border-slate-700">✏️</button>
+                    <button onClick={() => setShowStatsId(showStatsId === gen.id ? null : gen.id)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${showStatsId === gen.id ? "bg-indigo-600 text-white shadow-lg shadow-indigo-900/40" : "bg-slate-800 text-slate-400 border border-slate-700"}`}>Analysis</button>
+                    <button onClick={() => handleDelete(gen)} disabled={deletingId === gen.id} className="p-2 bg-red-900/20 hover:bg-red-900 text-red-500 hover:text-white rounded-xl text-xs transition-all border border-red-900/30">🗑️</button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 overflow-x-auto px-8 py-4 bg-slate-950/30 border-b border-slate-800 shadow-inner">
+                  {gen.timetables.map((tt: any, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => setTab(gen.id, idx)}
+                      className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all whitespace-nowrap shadow-lg ${
+                        activeIdx === idx ? "bg-blue-600 text-white scale-105" : "bg-slate-800 text-slate-500 hover:text-slate-300 border border-slate-700/50"
+                      }`}
+                    >
+                      {tt.class || tt.name || `Batch ${idx + 1}`}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="p-8">
+                  {showStatsId === gen.id ? (
+                    <div className="bg-slate-950/50 rounded-2xl p-6 border border-slate-800">
+                      <FacultyWorkloadTable data={gen.workload || []} />
+                    </div>
+                  ) : activeTT ? (
+                    <div className="bg-white rounded-3xl overflow-hidden shadow-2xl">
+                      <TimetableDisplay
+                        key={`${gen.id}-${activeIdx}`} 
+                        timetable={{
+                          id: `${gen.id}-${activeIdx}`,
+                          class: activeTT.class || activeTT.name || "Unknown",
+                          room: activeTT.room_no || activeTT.room || "",
+                          date: new Date().toLocaleDateString("en-GB"),
+                          wef: activeTT.effective_date || activeTT.effectiveDate || "",
+                          classTeacher: activeTT.class_teacher || activeTT.classTeacher || "",
+                          schedule: activeTT.schedule || {},
+                        }}
+                        subjects={getSubjects(activeTT.faculty_mapping || [])}
+                        timeSlots={timeSlots}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 text-slate-600 italic font-mono text-sm uppercase tracking-tighter">Logical Grid Uninitialized</div>
                   )}
                 </div>
               </div>
-              {/* Action buttons */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleRenameStart(gen)}
-                  title="Rename this generation"
-                  className="px-2.5 py-1.5 bg-slate-600 hover:bg-slate-500 text-white text-xs rounded-lg transition-colors"
-                >
-                  ✏️ Rename
-                </button>
-                <button
-                  onClick={() => handleDelete(gen)}
-                  disabled={deletingId === gen.id}
-                  title="Delete this generation"
-                  className="px-2.5 py-1.5 bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
-                >
-                  {deletingId === gen.id ? "Deleting…" : "🗑️ Delete"}
-                </button>
-                <button
-                  onClick={() => setShowStatsId(showStatsId === gen.id ? null : gen.id)}
-                  className={`px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
-                    showStatsId === gen.id 
-                      ? "bg-indigo-600 text-white" 
-                      : "bg-slate-600 hover:bg-slate-500 text-white"
-                  }`}
-                >
-                  {showStatsId === gen.id ? "📊 Hide Stats" : "📊 View Stats"}
-                </button>
-              </div>
-            </div>
-
-            {/* Batch tabs */}
-            <div className="flex gap-2 overflow-x-auto px-4 py-2 border-b border-slate-700">
-              {gen.timetables.map((tt: any, idx: number) => (
-                <button
-                  key={idx}
-                  onClick={() => setTab(gen.id, idx)}
-                  className={`px-3 py-1.5 rounded text-xs font-medium transition-colors whitespace-nowrap ${
-                    activeIdx === idx
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                  }`}
-                >
-                  {tt.class || tt.name || `Batch ${idx + 1}`}
-                </button>
-              ))}
-            </div>
-
-            {/* Timetable/Stats display */}
-            <div className="p-4" id={`gen-${gen.id}`}>
-              {showStatsId === gen.id ? (
-                <div className="bg-slate-900 rounded-lg p-4">
-                  <FacultyWorkloadTable data={gen.workload || []} />
-                </div>
-              ) : activeTT ? (
-                <TimetableDisplay
-                  key={`${gen.id}-${activeIdx}`} 
-                  timetable={{
-                    id: `${gen.id}-${activeIdx}`,
-                    class: activeTT.class || activeTT.name || "Unknown",
-                    room: activeTT.room_no || activeTT.room || "",
-                    date: new Date().toLocaleDateString("en-GB"),
-                    wef: activeTT.effective_date || activeTT.effectiveDate || "",
-                    classTeacher: activeTT.class_teacher || activeTT.classTeacher || "",
-                    schedule: activeTT.schedule || {},
-                  }}
-                  subjects={getSubjects(activeTT.faculty_mapping || [])}
-                  timeSlots={timeSlots}
-                  onCellEdit={() => {}}
-                />
-              ) : (
-                <p className="text-slate-400 text-center py-8">No timetable data for this batch.</p>
-              )}
-            </div>
-          </div>
-        );
-      })}
-
-      <style>{`
-        @media print {
-          body { background: white; }
-          .no-print { display: none !important; }
-        }
-      `}</style>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

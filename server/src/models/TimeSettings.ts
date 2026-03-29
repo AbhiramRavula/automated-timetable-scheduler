@@ -13,6 +13,7 @@ export interface ITimeSettings extends Document {
   lunchBreakAfterPeriod: number;
   lunchBreakDuration: number; // in minutes
   isActive: boolean;
+  institutionId: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +36,7 @@ const TimeSettingsSchema: Schema = new Schema(
     lunchBreakAfterPeriod: { type: Number, default: 3 },
     lunchBreakDuration: { type: Number, default: 60 },
     isActive: { type: Boolean, default: true },
+    institutionId: { type: Schema.Types.ObjectId, ref: "Institution", required: true },
   },
   { timestamps: true }
 );

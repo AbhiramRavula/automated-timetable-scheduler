@@ -4,6 +4,7 @@ export interface ITeacher extends Document {
   name: string;
   code: string;
   department: string;
+  institutionId: mongoose.Types.ObjectId;
   designation: string;
   labOnly: boolean;
   canTeachMultipleCourses: boolean;
@@ -13,8 +14,9 @@ export interface ITeacher extends Document {
 
 const TeacherSchema: Schema = new Schema({
   name: { type: String, required: true },
-  code: { type: String, required: true, unique: true },
+  code: { type: String, required: true },
   department: { type: String, required: true },
+  institutionId: { type: Schema.Types.ObjectId, ref: "Institution", required: true },
   designation: {
     type: String,
     enum: ["Professor", "Associate Professor", "Assistant Professor", "Lab Assistant", "Lecturer"],
@@ -30,5 +32,8 @@ const TeacherSchema: Schema = new Schema({
   ],
   maxLoadPerDay: { type: Number, default: 4 },
 });
+
+// Compound index to ensure teacher code is unique within an institution
+TeacherSchema.index({ code: 1, institutionId: 1 }, { unique: true });
 
 export default mongoose.model<ITeacher>("Teacher", TeacherSchema);

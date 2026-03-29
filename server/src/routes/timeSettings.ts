@@ -1,12 +1,14 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import TimeSettings from "../models/TimeSettings";
+import { RequestWithInstitution } from "../middleware/institutionMiddleware";
 
 const router = Router();
 
-// Get active time settings
-router.get("/active", async (req: Request, res: Response) => {
+// Get active time settings for an institution
+router.get("/active", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const settings = await TimeSettings.findOne({ isActive: true });
+    const settings = await TimeSettings.findOne({ institutionId, isActive: true });
     if (!settings) {
       // Return default settings if none exist
       return res.json({
@@ -24,6 +26,7 @@ router.get("/active", async (req: Request, res: Response) => {
         lunchBreakAfterPeriod: 3,
         lunchBreakDuration: 60,
         isActive: true,
+        institutionId: institutionId,
       });
     }
     return res.json(settings);
@@ -32,14 +35,15 @@ router.get("/active", async (req: Request, res: Response) => {
   }
 });
 
-// Create or update time settings
-router.post("/", async (req: Request, res: Response) => {
+// Create or update time settings for an institution
+router.post("/", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    // Deactivate all existing settings
-    await TimeSettings.updateMany({}, { isActive: false });
+    // Deactivate all existing settings for this institution
+    await TimeSettings.updateMany({ institutionId }, { isActive: false });
     
-    // Create new active settings
-    const settings = new TimeSettings({ ...req.body, isActive: true });
+    // Create new active settings for this institution
+    const settings = new TimeSettings({ ...req.body, institutionId, isActive: true });
     await settings.save();
     
     return res.status(201).json(settings);
@@ -48,16 +52,17 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
-// Update existing settings
-router.put("/:id", async (req: Request, res: Response) => {
+// Update existing settings for an institution
+router.put("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const settings = await TimeSettings.findByIdAndUpdate(
-      req.params.id,
+    const settings = await TimeSettings.findOneAndUpdate(
+      { _id: req.params.id, institutionId },
       req.body,
       { new: true }
     );
     if (!settings) {
-      return res.status(404).json({ error: "Settings not found" });
+      return res.status(404).json({ error: "Settings not found in this institution" });
     }
     return res.json(settings);
   } catch (error) {

@@ -12,10 +12,11 @@ export interface ICourse extends Document {
   priority: "core" | "elective";
   mustNotClashWith: string[];
   requiredRoomTag?: string;
+  institutionId: mongoose.Types.ObjectId;
 }
 
 const CourseSchema: Schema = new Schema({
-  code: { type: String, required: true, unique: true },
+  code: { type: String, required: true },
   name: { type: String, required: true },
   type: {
     type: String,
@@ -34,6 +35,10 @@ const CourseSchema: Schema = new Schema({
   },
   mustNotClashWith: [{ type: String }],
   requiredRoomTag: { type: String },
+  institutionId: { type: Schema.Types.ObjectId, ref: "Institution", required: true },
 });
+
+// Compound index to ensure course code is unique within an institution
+CourseSchema.index({ code: 1, institutionId: 1 }, { unique: true });
 
 export default mongoose.model<ICourse>("Course", CourseSchema);

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getTimetables } from "../api";
-import { FacultyWorkload } from "../components/FacultyWorkloadTable";
+import { getFaculty, createFaculty, updateFaculty, deleteFaculty, getTimetables, getDepartments } from "../api";
+import { useInstitution } from "../context/InstitutionContext";
 
 interface Faculty {
   _id?: string;
@@ -14,7 +14,9 @@ interface Faculty {
 }
 
 export function FacultyPage() {
+  const { activeInstitution } = useInstitution();
   const [faculty, setFaculty] = useState<Faculty[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -23,16 +25,21 @@ export function FacultyPage() {
   const [workloadMap, setWorkloadMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (activeInstitution) {
+      loadData();
+    }
+  }, [activeInstitution]);
 
   const loadData = async () => {
+    setLoading(true);
     try {
-      const [facData, schedules] = await Promise.all([
+      const [facData, schedules, deptData] = await Promise.all([
         getFaculty(),
-        getTimetables()
+        getTimetables(),
+        getDepartments()
       ]);
       setFaculty(facData);
+      setDepartments(deptData);
       
       if (schedules && schedules.length > 0) {
         const latest = schedules[0];
@@ -84,7 +91,7 @@ export function FacultyPage() {
       id: "", 
       code: "",
       name: "",
-      department: "Information Technology",
+      department: departments.length > 0 ? departments[0].name : "General",
       designation: "Assistant Professor",
       email: "",
       phone: ""
@@ -129,7 +136,7 @@ export function FacultyPage() {
             await createFaculty({
               name,
               code,
-              department: department || "Information Technology",
+              department: department || (departments.length > 0 ? departments[0].name : "General"),
               designation: designation || "Assistant Professor",
               email: email || "",
               phone: ""
@@ -143,15 +150,15 @@ export function FacultyPage() {
     }
   };
 
+  if (!activeInstitution) return <div className="p-8 text-center text-slate-400 font-medium">Please select an institution profile.</div>;
   if (loading) return <div className="p-8 text-center text-slate-400 font-medium">Loading faculty...</div>;
-
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-50 mb-2">Faculty Management</h1>
-          <p className="text-slate-400">Manage teaching staff and their details</p>
+          <h1 className="text-3xl font-bold text-slate-50 mb-2">Faculty Management ({activeInstitution.name})</h1>
+          <p className="text-slate-400">Manage teaching staff and their primary departments</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -175,7 +182,7 @@ export function FacultyPage() {
       <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
         <input
           type="text"
-          placeholder="Search faculty by name or department..."
+          placeholder="Search faculty by name, department or code..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -198,12 +205,27 @@ export function FacultyPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Department</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-slate-300 mb-2">Primary Department</label>
+              <select
                 value={editForm.department}
                 onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100"
+              >
+                {departments.length > 0 ? (
+                  departments.map(d => <option key={d._id} value={d.name}>{d.name}</option>)
+                ) : (
+                  <option value="General">General</option>
+                )}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Code *</label>
+              <input
+                type="text"
+                value={editForm.code}
+                onChange={(e) => setEditForm({ ...editForm, code: e.target.value.toUpperCase() })}
+                className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100"
+                placeholder="PROF01"
               />
             </div>
             <div>
@@ -230,27 +252,17 @@ export function FacultyPage() {
                 placeholder="john.doe@college.edu"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Phone</label>
-              <input
-                type="tel"
-                value={editForm.phone}
-                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100"
-                placeholder="+91 1234567890"
-              />
-            </div>
           </div>
-          <div className="flex gap-3 mt-4">
+          <div className="flex gap-3 mt-6">
             <button
               onClick={handleSaveNew}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
             >
-              Save
+              Add Faculty
             </button>
             <button
               onClick={() => { setIsAdding(false); setEditForm(null); }}
-              className="px-4 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg transition-colors"
+              className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
             >
               Cancel
             </button>
@@ -259,153 +271,89 @@ export function FacultyPage() {
       )}
 
       {/* Faculty List */}
-      <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-900">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Code
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Department
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Designation
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Weekly Load
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">
-                  Actions
-                </th>
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-slate-900/80 border-b border-slate-700">
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Code</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Name</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Dept</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Designation</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Load</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700">
+            <tbody className="divide-y divide-slate-700/50">
               {filteredFaculty.map((f) => (
-                <tr key={f._id} className="hover:bg-slate-750 transition-colors">
+                <tr key={f._id} className="hover:bg-slate-750/50 transition-colors group">
                   {editingId === f._id && editForm ? (
-                    // Edit Mode
-                    <>
-                      <td className="px-6 py-4">
-                        <input
-                          type="text"
-                          value={editForm.code}
-                          onChange={(e) => setEditForm({ ...editForm, code: e.target.value.toUpperCase() })}
-                          className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
+                    <td colSpan={6} className="px-6 py-4 bg-slate-900/30">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-2">
                         <input
                           type="text"
                           value={editForm.name}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                          className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
+                          className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm"
+                          placeholder="Name"
                         />
-                      </td>
-                      <td className="px-6 py-4">
-                        <input
-                          type="text"
+                        <select
                           value={editForm.department}
                           onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                          className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
-                        />
-                      </td>
-                      <td className="px-6 py-4">
+                          className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm"
+                        >
+                          {departments.map(d => <option key={d._id} value={d.name}>{d.name}</option>)}
+                          {departments.length === 0 && <option value={f.department}>{f.department}</option>}
+                        </select>
                         <select
                           value={editForm.designation}
                           onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
-                          className="w-full px-2 py-1 bg-slate-900 border border-slate-600 rounded text-slate-100 text-sm"
+                          className="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm"
                         >
                           <option value="Professor">Professor</option>
                           <option value="Associate Professor">Associate Professor</option>
                           <option value="Assistant Professor">Assistant Professor</option>
                           <option value="Lecturer">Lecturer</option>
-                          <option value="Lab Assistant">Lab Assistant</option>
                         </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={handleSave}
-                          className="text-green-400 hover:text-green-300 mr-3"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={handleCancel}
-                          className="text-slate-400 hover:text-slate-300"
-                        >
-                          Cancel
-                        </button>
-                      </td>
-                    </>
+                        <div className="flex gap-2">
+                          <button onClick={handleSave} className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm font-bold">Save</button>
+                          <button onClick={handleCancel} className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-sm">Cancel</button>
+                        </div>
+                      </div>
+                    </td>
                   ) : (
-                    // View Mode
                     <>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">
-                        {f.code}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-400">{f.code}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-slate-200">{f.name}</div>
-                        {f.email && <div className="text-xs text-slate-400">{f.email}</div>}
+                        <div className="text-sm font-bold text-slate-100">{f.name}</div>
+                        {f.email && <div className="text-[10px] text-slate-500">{f.email}</div>}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                        {f.department}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
-                        {f.designation}
-                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-300 uppercase tracking-tighter">{f.department}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-400">{f.designation}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                          (workloadMap[f.code.toUpperCase()] || 0) > 18 ? 'bg-red-900/40 text-red-400' : 
-                          (workloadMap[f.code.toUpperCase()] || 0) > 0 ? 'bg-green-900/40 text-green-400' :
-                          'bg-slate-700 text-slate-500'
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold ${
+                          (workloadMap[f.code.toUpperCase()] || 0) > 18 ? 'bg-red-500/10 text-red-500' : 
+                          (workloadMap[f.code.toUpperCase()] || 0) > 0 ? 'bg-green-500/10 text-green-500' :
+                          'bg-slate-700/50 text-slate-500'
                         }`}>
-                          {workloadMap[f.code.toUpperCase()] ? `${workloadMap[f.code.toUpperCase()].toFixed(1)} Hrs` : 'No Load'}
+                          {workloadMap[f.code.toUpperCase()] ? `${workloadMap[f.code.toUpperCase()].toFixed(1)} HRS` : '0 HRS'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => handleEdit(f)}
-                          className="text-blue-400 hover:text-blue-300 mr-3"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(f._id!)}
-                          className="text-red-400 hover:text-red-300"
-                        >
-                          Delete
-                        </button>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                        <button onClick={() => handleEdit(f)} className="text-slate-500 hover:text-blue-400 transition-colors mr-4">✏️</button>
+                        <button onClick={() => handleDelete(f._id!)} className="text-slate-500 hover:text-red-400 transition-colors">🗑️</button>
                       </td>
                     </>
                   )}
                 </tr>
               ))}
+              {filteredFaculty.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-500 italic">No faculty members found.</td>
+                </tr>
+              )}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-        <h2 className="text-lg font-bold text-slate-50 mb-3">Statistics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <p className="text-sm text-slate-400">Total Faculty</p>
-            <p className="text-2xl font-bold text-blue-400">{faculty.length}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-400">Filtered Results</p>
-            <p className="text-2xl font-bold text-green-400">{filteredFaculty.length}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-400">Department</p>
-            <p className="text-2xl font-bold text-purple-400">IT</p>
-          </div>
         </div>
       </div>
     </div>

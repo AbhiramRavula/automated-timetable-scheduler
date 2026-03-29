@@ -25,12 +25,66 @@ export interface TimetableGenerateResponse {
 
 const API_BASE_URL = "http://localhost:4000/api";
 
+// Helper to get headers with institution ID
+function getHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {
+  const institutionId = localStorage.getItem("active_institution_id");
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (institutionId) {
+    headers["x-institution-id"] = institutionId;
+  }
+  return headers;
+}
+
+// Institution functions
+export async function getInstitutions(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/institutions`);
+  if (!response.ok) throw new Error("Failed to fetch institutions");
+  return response.json();
+}
+
+export async function createInstitution(institution: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/institutions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(institution),
+  });
+  if (!response.ok) throw new Error("Failed to create institution");
+  return response.json();
+}
+
+export async function deleteInstitution(id: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/institutions/${id}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete institution");
+  return response.json();
+}
+
+// Department functions
+export async function getDepartments(): Promise<any[]> {
+  const response = await fetch(`${API_BASE_URL}/departments`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error("Failed to fetch departments");
+  return response.json();
+}
+
+export async function createDepartment(department: any): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/departments`, {
+    method: "POST",
+    headers: getHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(department),
+  });
+  if (!response.ok) throw new Error("Failed to create department");
+  return response.json();
+}
+
 export async function generateTimetables(
   request: TimetableGenerateRequest
 ): Promise<TimetableGenerateResponse> {
   const response = await fetch(`${API_BASE_URL}/timetables/generate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(request),
   });
 
@@ -45,7 +99,7 @@ export async function generateTimetables(
 export async function validateTimetable(timetable: any[]): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/timetables/validate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ timetable }),
   });
 
@@ -58,22 +112,27 @@ export async function validateTimetable(timetable: any[]): Promise<any> {
 }
 
 export async function getTimetables(): Promise<any[]> {
-  const response = await fetch(`${API_BASE_URL}/timetables`);
+  const response = await fetch(`${API_BASE_URL}/timetables`, {
+    headers: getHeaders(),
+  });
   if (!response.ok) throw new Error("Failed to fetch timetables");
   const data = await response.json();
-  // If the backend returns a single object with internal array, normalize it
   return Array.isArray(data) ? data : data.timetables || [];
 }
 
 // Batch functions
 export async function getBatches(): Promise<any[]> {
-  const response = await fetch(`${API_BASE_URL}/batches`);
+  const response = await fetch(`${API_BASE_URL}/batches`, {
+    headers: getHeaders(),
+  });
   if (!response.ok) throw new Error("Failed to fetch batches");
   return response.json();
 }
 
 export async function getRooms(): Promise<any[]> {
-  const response = await fetch(`${API_BASE_URL}/rooms`);
+  const response = await fetch(`${API_BASE_URL}/rooms`, {
+    headers: getHeaders(),
+  });
   if (!response.ok) throw new Error("Failed to fetch rooms");
   return response.json();
 }
@@ -81,7 +140,7 @@ export async function getRooms(): Promise<any[]> {
 export async function createBatch(batch: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/batches`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(batch),
   });
   if (!response.ok) throw new Error("Failed to create batch");
@@ -91,7 +150,7 @@ export async function createBatch(batch: any): Promise<any> {
 export async function updateBatch(id: string, batch: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/batches/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(batch),
   });
   if (!response.ok) throw new Error("Failed to update batch");
@@ -101,6 +160,7 @@ export async function updateBatch(id: string, batch: any): Promise<any> {
 export async function deleteBatch(id: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/batches/${id}`, {
     method: "DELETE",
+    headers: getHeaders(),
   });
   if (!response.ok) throw new Error("Failed to delete batch");
   return response.json();
@@ -109,6 +169,7 @@ export async function deleteBatch(id: string): Promise<any> {
 export async function deleteTimetable(id: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/timetables/${id}`, {
     method: "DELETE",
+    headers: getHeaders(),
   });
   if (!response.ok) throw new Error("Failed to delete timetable");
   return response.json();
@@ -117,7 +178,7 @@ export async function deleteTimetable(id: string): Promise<any> {
 export async function updateTimetableLabel(id: string, updates: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/timetables/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(updates),
   });
   if (!response.ok) throw new Error("Failed to update timetable");
@@ -127,7 +188,7 @@ export async function updateTimetableLabel(id: string, updates: any): Promise<an
 export async function createRoom(room: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/rooms`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(room),
   });
   if (!response.ok) throw new Error("Failed to add room");
@@ -137,7 +198,7 @@ export async function createRoom(room: any): Promise<any> {
 export async function updateRoom(id: string, room: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/rooms/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(room),
   });
   if (!response.ok) throw new Error("Failed to update room");
@@ -147,6 +208,7 @@ export async function updateRoom(id: string, room: any): Promise<any> {
 export async function deleteRoom(id: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/rooms/${id}`, {
     method: "DELETE",
+    headers: getHeaders(),
   });
   if (!response.ok) throw new Error("Failed to delete room");
   return response.json();
@@ -154,7 +216,9 @@ export async function deleteRoom(id: string): Promise<any> {
 
 // Subject and Faculty CRUD functions
 export async function getSubjects(): Promise<any[]> {
-  const response = await fetch(`${API_BASE_URL}/subjects`);
+  const response = await fetch(`${API_BASE_URL}/subjects`, {
+    headers: getHeaders(),
+  });
   if (!response.ok) throw new Error("Failed to fetch subjects");
   return response.json();
 }
@@ -162,7 +226,7 @@ export async function getSubjects(): Promise<any[]> {
 export async function createSubject(subject: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/subjects`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(subject),
   });
   if (!response.ok) throw new Error("Failed to create subject");
@@ -172,7 +236,7 @@ export async function createSubject(subject: any): Promise<any> {
 export async function updateSubject(id: string, subject: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/subjects/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(subject),
   });
   if (!response.ok) throw new Error("Failed to update subject");
@@ -182,13 +246,16 @@ export async function updateSubject(id: string, subject: any): Promise<any> {
 export async function deleteSubject(id: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/subjects/${id}`, {
     method: "DELETE",
+    headers: getHeaders(),
   });
   if (!response.ok) throw new Error("Failed to delete subject");
   return response.json();
 }
 
 export async function getFaculty(): Promise<any[]> {
-  const response = await fetch(`${API_BASE_URL}/faculty`);
+  const response = await fetch(`${API_BASE_URL}/faculty`, {
+    headers: getHeaders(),
+  });
   if (!response.ok) throw new Error("Failed to fetch faculty");
   return response.json();
 }
@@ -196,7 +263,7 @@ export async function getFaculty(): Promise<any[]> {
 export async function createFaculty(member: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/faculty`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(member),
   });
   if (!response.ok) throw new Error("Failed to add faculty member");
@@ -206,7 +273,7 @@ export async function createFaculty(member: any): Promise<any> {
 export async function updateFaculty(id: string, member: any): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/faculty/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: getHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(member),
   });
   if (!response.ok) throw new Error("Failed to update faculty member");
@@ -216,8 +283,8 @@ export async function updateFaculty(id: string, member: any): Promise<any> {
 export async function deleteFaculty(id: string): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/faculty/${id}`, {
     method: "DELETE",
+    headers: getHeaders(),
   });
   if (!response.ok) throw new Error("Failed to delete faculty member");
   return response.json();
 }
-

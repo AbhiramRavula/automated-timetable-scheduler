@@ -9,6 +9,9 @@ import chatRoutes from "./routes/chat";
 import facultyRoutes from "./routes/faculty";
 import subjectsRoutes from "./routes/subjects";
 import roomsRoutes from "./routes/rooms";
+import institutionRoutes from "./routes/institutions";
+import departmentRoutes from "./routes/departments";
+import { institutionMiddleware } from "./middleware/institutionMiddleware";
 
 dotenv.config();
 const app = express();
@@ -27,7 +30,14 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", message: "Server running" });
 });
 
-// Mount routes
+// Institution routes (some don't need header)
+app.use("/api/institutions", institutionRoutes);
+
+// Apply institution middleware to all other API routes
+app.use("/api", institutionMiddleware);
+
+// Mount other routes
+app.use("/api/departments", departmentRoutes);
 app.use("/api/timetables", timetableRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/time-settings", timeSettingsRoutes);

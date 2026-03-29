@@ -1,12 +1,15 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import Teacher from "../models/Teacher";
+import { RequestWithInstitution } from "../middleware/institutionMiddleware";
 
 const router = Router();
 
 // GET all teachers
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
+
   try {
-    const teachers = await Teacher.find().sort({ name: 1 });
+    const teachers = await Teacher.find({ institutionId }).sort({ name: 1 });
     res.json(teachers);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to fetch faculty" });
@@ -14,9 +17,12 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // POST new teacher
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
+
   try {
-    const teacher = new Teacher(req.body);
+    const teacherData = { ...req.body, institutionId };
+    const teacher = new Teacher(teacherData);
     await teacher.save();
     res.status(201).json(teacher);
   } catch (err: any) {
@@ -25,10 +31,12 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // PUT update teacher
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
+
   try {
-    const teacher = await Teacher.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!teacher) return res.status(404).json({ error: "Faculty member not found" });
+    const teacher = await Teacher.findOneAndUpdate({ _id: req.params.id, institutionId }, req.body, { new: true });
+    if (!teacher) return res.status(404).json({ error: "Faculty member not found in this institution" });
     res.json(teacher);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to update faculty member" });
@@ -36,10 +44,12 @@ router.put("/:id", async (req: Request, res: Response) => {
 });
 
 // DELETE teacher
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
+
   try {
-    const teacher = await Teacher.findByIdAndDelete(req.params.id);
-    if (!teacher) return res.status(404).json({ error: "Faculty member not found" });
+    const teacher = await Teacher.findOneAndDelete({ _id: req.params.id, institutionId });
+    if (!teacher) return res.status(404).json({ error: "Faculty member not found in this institution" });
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to delete faculty member" });

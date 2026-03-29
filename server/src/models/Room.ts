@@ -9,10 +9,11 @@ export interface IRoom extends Document {
   availableDays: number[];
   availableSlots: number[];
   tags: string[];
+  institutionId: mongoose.Types.ObjectId;
 }
 
 const RoomSchema: Schema = new Schema({
-  name: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
   capacity: { type: Number, required: true },
   type: {
     type: String,
@@ -24,6 +25,10 @@ const RoomSchema: Schema = new Schema({
   availableDays: [{ type: Number }],
   availableSlots: [{ type: Number }],
   tags: [{ type: String }],
+  institutionId: { type: Schema.Types.ObjectId, ref: "Institution", required: true },
 });
+
+// Compound index to ensure room name is unique within an institution
+RoomSchema.index({ name: 1, institutionId: 1 }, { unique: true });
 
 export default mongoose.model<IRoom>("Room", RoomSchema);

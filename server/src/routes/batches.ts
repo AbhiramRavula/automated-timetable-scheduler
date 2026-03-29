@@ -1,12 +1,14 @@
-import { Router, Request, Response } from "express";
+import { Router, Response } from "express";
 import Batch from "../models/Batch";
+import { RequestWithInstitution } from "../middleware/institutionMiddleware";
 
 const router = Router();
 
 // Get all batches
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const batches = await Batch.find();
+    const batches = await Batch.find({ institutionId });
     return res.json(batches);
   } catch (error) {
     return res.status(500).json({ error: "Failed to fetch batches" });
@@ -14,9 +16,10 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // Create batch
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const batch = new Batch(req.body);
+    const batch = new Batch({ ...req.body, institutionId });
     await batch.save();
     return res.status(201).json(batch);
   } catch (error) {
@@ -25,11 +28,16 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // Update batch
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const batch = await Batch.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const batch = await Batch.findOneAndUpdate(
+      { _id: req.params.id, institutionId },
+      req.body,
+      { new: true }
+    );
     if (!batch) {
-      return res.status(404).json({ error: "Batch not found" });
+      return res.status(404).json({ error: "Batch not found in this institution" });
     }
     return res.json(batch);
   } catch (error) {
@@ -38,11 +46,12 @@ router.put("/:id", async (req: Request, res: Response) => {
 });
 
 // Delete batch
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", async (req: RequestWithInstitution, res: Response) => {
+  const institutionId = req.institutionId;
   try {
-    const batch = await Batch.findByIdAndDelete(req.params.id);
+    const batch = await Batch.findOneAndDelete({ _id: req.params.id, institutionId });
     if (!batch) {
-      return res.status(404).json({ error: "Batch not found" });
+      return res.status(404).json({ error: "Batch not found in this institution" });
     }
     return res.json({ message: "Batch deleted successfully" });
   } catch (error) {
