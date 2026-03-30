@@ -1,3 +1,4 @@
+import { Request, Response } from "express";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -26,7 +27,7 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
-app.get("/api/health", (_req, res) => {
+app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", message: "Server running" });
 });
 

@@ -49,9 +49,9 @@ The timetable generation cycle is a synchronous API workflow triggered from the 
 4.  **Local Search Optimization**:
     The `scheduler.ts` runs a **Simulated Annealing** loop (N-1 move and N-2 swap operators) for 1000 iterations to reduce gap penalties and balance day loads.
 5.  **Matrix Verification**:
-    Every move is verified in $O(1)$ time by the `ConflictMatrix` in `validator.ts`, ensuring zero collisions.
+    Every move is verified in $O(1)$ time by the `ConflictMatrix` in `validator.ts`. This represents a significant optimization over traditional $O(N)$ scanning where $N$ is the total number of events, allowing for complex multi-departmental grids (IT, CME) to be solved simultaneously.
 6.  **Persistence & Response**:
-    The final optimized grid is saved as a `Timetable` object and returned to the client as a display-ready matrix.
+    The final optimized grid is saved as a `Timetable` object. We utilize **MongoDB's Document Model** to store these sparse matrices as nested BSON objects, providing significantly faster retrieval and schema flexibility compared to rigid JOIN-heavy SQL relational tables—essential for handling unpredictable institutional grid shapes.
 
 ---
 

@@ -16,12 +16,13 @@ The system employs an **LLM-Augmented Constraint Optimization** framework to sol
     - **N-1 (Move)**: Relocates single events to empty, conflict-free slots.
     - **N-2 (Swap)**: Exchanges time slots for two events to explore diverse neighborhoods.
 - **Cooling Schedule**: Geometric cooling ($T_{i+1} = T_i \cdot 0.995$) to balance exploration and exploitation.
-- **Acceptance Criterion**: Metropolis-Hastings probability for escaping local optima.
+- **Acceptance Criterion**: Metropolis-Hastings probability ($P = e^{-\Delta E / T}$) for escaping local optima by occasionally accepting worse solutions.
+- **Convergence Behavior**: The cooling schedule is designed to transition from a "hot" state (High Exploration) to a "cold" state (Fine-tuning), minimizing the global objective function $F(x)$.
 
 ### Phase 3: Hardware Verification (Matrix Logic)
-- **Data Structure**: `ConflictMatrix`
-- **Performance**: $O(1)$ time complexity for conflict lookups (Teacher, Room, and Batch collisions).
-- **Rule Engine**: Enforces rigid academic blockages and lunch breaks.
+- **Data Structure**: `ConflictMatrix` employing Multi-Dimensional Hash Mapping.
+- **Performance**: $O(1)$ time complexity for collision detection. By pre-indexing Faculty, Room, and Batch availability into constant-time lookup maps, the scheduler can validate massive move-sets (~1000 per second) without linear scanning of existing events.
+- **Rule Engine**: Enforces rigid academic blockages, mandatory lunch breaks, and inter-departmental resource priority.
 
 ## 🛠️ Specialized Logic
 

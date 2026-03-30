@@ -133,6 +133,7 @@ export function RoomsPage() {
                 type="text"
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                onFocus={(e) => e.target.select()}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100"
                 placeholder="N 305"
               />
@@ -143,6 +144,7 @@ export function RoomsPage() {
                 type="number"
                 value={editForm.capacity}
                 onChange={(e) => setEditForm({ ...editForm, capacity: parseInt(e.target.value) })}
+                onFocus={(e) => e.target.select()}
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-slate-100"
               />
             </div>

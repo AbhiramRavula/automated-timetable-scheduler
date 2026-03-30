@@ -222,6 +222,16 @@ export function SubjectsPage() {
                 className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Required Room Tag (Optional)</label>
+              <input
+                type="text"
+                value={editForm.requiredRoomTag || ""}
+                onChange={(e) => setEditForm({ ...editForm, requiredRoomTag: e.target.value })}
+                className="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-slate-100"
+                placeholder="coding-lab, seminar-hall"
+              />
+            </div>
           </div>
 
           <div className="mt-6">
