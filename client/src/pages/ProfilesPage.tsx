@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useInstitution } from '../context/InstitutionContext';
 import { createInstitution, deleteInstitution, getDepartments, createDepartment } from '../api';
 
-export const ProfilesPage: React.FC = () => {
+export function ProfilesPage() {
   const { institutions, activeInstitution, setActiveInstitution, refreshInstitutions } = useInstitution();
   
   // Institution Form State
@@ -202,4 +202,4 @@ export const ProfilesPage: React.FC = () => {
       </div>
     </div>
   );
-};
+}

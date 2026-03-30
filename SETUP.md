@@ -1,76 +1,73 @@
-# Setup Instructions
+# 🛠️ Setup & Installation (v4.0.0)
 
-## Quick Setup (Windows)
+Follow these steps for a complete local environment setup of the Automated Timetable Scheduler.
 
-### Option 1: Run Setup Scripts
+## 1. Prerequisites
+- **Node.js** (v20 or higher)
+- **MongoDB** (Local instance or Atlas connection)
+- **Gemini API Key** (Required for LLM Optimization)
 
-1. Open the `automated-timetable-scheduler` folder
-2. Double-click `setup-backend.bat` to install backend dependencies
-3. Double-click `setup-frontend.bat` to install frontend dependencies
+---
 
-### Option 2: Manual Setup
+## 2. Backend Setup (`server/`)
 
-#### Backend Setup
-
+### 2.1 Install Dependencies
 ```bash
-cd automated-timetable-scheduler/server
-npm install express mongoose cors dotenv
-npm install -D typescript ts-node-dev @types/node @types/express @types/cors
+cd server
+npm install
 ```
 
-#### Frontend Setup
-
-```bash
-cd automated-timetable-scheduler/client
-npm install react react-dom
-npm install -D @vitejs/plugin-react vite typescript @types/react @types/react-dom
-npm install -D tailwindcss postcss autoprefixer
+### 2.2 Environment Configuration
+Create a `.env` file in the `server/` root:
+```ini
+PORT=4000
+MONGODB_URI=mongodb://localhost:27017/timetable-scheduler
+GEMINI_API_KEY=your_gemini_api_key_here
+CORS_ORIGIN=http://localhost:5173
 ```
 
-## Environment Configuration
-
-1. Copy `server/.env.example` to `server/.env`
-2. Update the values:
-   ```
-   PORT=4000
-   MONGODB_URI=mongodb://localhost:27017/timetable-scheduler
-   GEMINI_API_KEY=your_actual_gemini_api_key
-   ```
-
-## Running the Application
-
-### Start Backend (Terminal 1)
-
+### 2.3 Run Database Seeding
+To populate the system with the **Matrusri Engineering College** dataset and a matching institutional profile:
 ```bash
-cd automated-timetable-scheduler/server
+npx ts-node src/seed.ts
+```
+
+### 2.4 Start Development Server
+```bash
 npm run dev
 ```
+Test with: `http://localhost:4000/api/health`
 
-Server will run on http://localhost:4000
-Test: http://localhost:4000/api/health
+---
 
-### Start Frontend (Terminal 2)
+## 3. Frontend Setup (`client/`)
 
+### 3.1 Install Dependencies
 ```bash
-cd automated-timetable-scheduler/client
-npm run dev
+cd client
+npm install
 ```
 
-Frontend will run on http://localhost:5173
+### 3.2 Start Development Server (Vite)
+```bash
+npm run dev
+```
+Preview at: `http://localhost:5173`
 
-## Verify Setup
+---
 
-1. Backend health check: http://localhost:4000/api/health
-   - Should return: `{"status":"ok","message":"Server running"}`
+## 🏁 Verification Checklist
 
-2. Frontend: http://localhost:5173
-   - Should display: "AI Timetable Scheduler – Frontend OK ✅"
+- [ ] **Health Check**: `http://localhost:4000/api/health` returns `status: ok`.
+- [ ] **Seeding**: MongoDB contains collections for `institutions`, `faculty`, and `batches`.
+- [ ] **LLM Integration**: Check server logs after clicking "Generate" to ensure Gemini API is receiving prompts.
+- [ ] **UI Rendering**: Classes page correctly displays seeded batches with "View Details" modals functional.
 
-## Next Steps
+## 🚀 Troubleshooting
+- **LLM Fails**: Ensure your `GEMINI_API_KEY` is active and billed if necessary.
+- **CORS Errors**: Verify that `CORS_ORIGIN` in `.env` matches your browser URL.
+- **Port Conflicts**: If port 4000 is busy, change `PORT` in `.env`.
 
-Once both are running successfully:
-- Implement Mongoose models
-- Create API routes for timetable generation
-- Integrate Gemini Pro LLM
-- Build validator module
-- Connect frontend to backend APIs
+---
+**Version:** 4.0.0 (Research Edition)  
+**Date:** March 30, 2026

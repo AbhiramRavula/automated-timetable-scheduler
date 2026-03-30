@@ -4,170 +4,446 @@ import Teacher from "./models/Teacher";
 import Batch from "./models/Batch";
 import Course from "./models/Course";
 import Room from "./models/Room";
+import Institution from "./models/Institution";
+import Department from "./models/Department";
+import Timetable from "./models/Timetable";
 
 dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/timetable-scheduler";
 
-const roomData = [
-  { name: "301", capacity: 70, type: "lecture" },
-  { name: "201", capacity: 70, type: "lecture" },
-  { name: "202", capacity: 70, type: "lecture" },
-  { name: "101", capacity: 70, type: "lecture" },
-  { name: "102", capacity: 70, type: "lecture" },
-  { name: "IoT Lab", capacity: 35, type: "lab" },
-  { name: "AI Lab", capacity: 35, type: "lab" },
-  { name: "OS Lab", capacity: 35, type: "lab" },
-  { name: "FSD Lab", capacity: 35, type: "lab" },
-  { name: "BE Lab", capacity: 35, type: "lab" },
-  { name: "Python Lab", capacity: 35, type: "lab" },
-  { name: "DB Lab", capacity: 35, type: "lab" },
-];
-
-const facultyData = [
-  { name: "Mr. V. Gopinath", code: "VG", dept: "IT" },
-  { name: "Mrs. Y. Sirisha", code: "YS", dept: "IT" },
-  { name: "Dr. M. Krishna", code: "MK", dept: "IT" },
-  { name: "Mrs. M. Srividya", code: "MSV", dept: "IT" },
-  { name: "Ms. J. Nagalaxmi", code: "JN", dept: "IT" },
-  { name: "Mrs. S. Nagajyothi", code: "SNJ", dept: "IT" },
-  { name: "Mrs. T. Aruna Jyothi", code: "TAJ", dept: "IT" },
-  { name: "Dr. J. Srinivas", code: "JS", dept: "IT" },
-  { name: "Mr. A. Rajesh", code: "AR", dept: "IT" },
-  { name: "Dr. K. Durga Prasad", code: "KDP", dept: "IT" },
-  { name: "Mr. K. Durga Prasad", code: "KDP2", dept: "IT" },
-  { name: "Ms. T. Vijayalaxmi", code: "TVL", dept: "IT" },
-  { name: "Mrs. K. Mounika", code: "KM", dept: "IT" },
-  { name: "Mrs. S. Sirisha", code: "SS", dept: "IT" },
-  { name: "Ms. T. Vijaya Laxmi", code: "TVL2", dept: "IT" },
-  { name: "Mrs. STVSAV Ramya", code: "SR", dept: "IT" },
-  { name: "Dr. K. Koteswara Rao", code: "KKR", dept: "IT" },
-  { name: "Dr. Pallavi Khare", code: "PK", dept: "IT" },
-  { name: "Dr. N. Shribala", code: "NS", dept: "IT" },
-  { name: "Dr. M. Naresh", code: "MN", dept: "IT" },
-  { name: "Dr. CH Rajini Prashanth", code: "CRP", dept: "IT" },
-  { name: "Mrs. K. Sunitha", code: "KS", dept: "IT" },
-  { name: "Mrs. J. Shailaja", code: "JS2", dept: "IT" },
-  { name: "Mrs. A S Keerthi Nayani", code: "ASKN", dept: "IT" },
-  { name: "New Faculty A", code: "NFA", dept: "IT" },
-  { name: "New Faculty B", code: "NFB", dept: "IT" },
-];
-
-const batchData = [
-  { name: "VII SEM", year: 4, semester: "7", room: "301", classTeacher: "Mr. V. Gopinath", effectiveDate: "2024-03-01" },
-  { name: "V SEM Sec A", year: 3, semester: "5", room: "201", classTeacher: "Dr. J. Srinivas", effectiveDate: "2024-03-01" },
-  { name: "V SEM Sec B", year: 3, semester: "5", room: "202", classTeacher: "Mr. V. Gopinath", effectiveDate: "2024-03-01" },
-  { name: "III SEM Sec A", year: 2, semester: "3", room: "101", classTeacher: "Ms. T. Vijaya Laxmi", effectiveDate: "2024-03-01" },
-  { name: "III SEM Sec B", year: 2, semester: "3", room: "102", classTeacher: "Mr. V. Gopinath", effectiveDate: "2024-03-01" },
-];
-
-const subjectsData = [
-  // VII SEM
-  { code: "IOT", name: "Internet of Things", batch: "VII SEM", teacherCodes: ["VG"] },
-  { code: "BDA", name: "Big Data Analytics", batch: "VII SEM", teacherCodes: ["YS"] },
-  { code: "ENT", name: "Entrepreneurship", batch: "VII SEM", teacherCodes: ["MK"] },
-  { code: "NLP", name: "Natural Language Processing", batch: "VII SEM", teacherCodes: ["MSV"] },
-  { code: "SPM", name: "Software Project Management", batch: "VII SEM", teacherCodes: ["JN"] },
-  { code: "IOT-LAB", name: "Internet of Things Lab", batch: "VII SEM", teacherCodes: ["VG"] },
-  { code: "PW-I", name: "Project Work - I", batch: "VII SEM", teacherCodes: ["SNJ", "TAJ"] },
-
-  // V SEM Sec A
-  { code: "PPL-A", name: "Principles of Programming Languages", batch: "V SEM Sec A", teacherCodes: ["JS"] },
-  { code: "AI-A", name: "Artificial Intelligence", batch: "V SEM Sec A", teacherCodes: ["MSV"] },
-  { code: "OS-A", name: "Operating Systems", batch: "V SEM Sec A", teacherCodes: ["AR"] },
-  { code: "SE-A", name: "Software Engineering", batch: "V SEM Sec A", teacherCodes: ["KDP"] },
-  { code: "FSD-A", name: "Full Stack Development", batch: "V SEM Sec A", teacherCodes: ["TVL"] },
-  { code: "OOAD-A", name: "Object Oriented Analysis and Design", batch: "V SEM Sec A", teacherCodes: ["SS"] },
-  { code: "AI-LAB-A", name: "Artificial Intelligence Lab", batch: "V SEM Sec A", teacherCodes: ["MSV"] },
-  { code: "OS-LAB-A", name: "Operating System Lab", batch: "V SEM Sec A", teacherCodes: ["AR", "KDP"] },
-  { code: "FSD-LAB-A", name: "Full Stack Development Lab", batch: "V SEM Sec A", teacherCodes: ["TVL", "JN"] },
-
-  // V SEM Sec B
-  { code: "PPL-B", name: "Principles of Programming Languages", batch: "V SEM Sec B", teacherCodes: ["VG"] },
-  { code: "AI-B", name: "Artificial Intelligence", batch: "V SEM Sec B", teacherCodes: ["JS"] },
-  { code: "OS-B", name: "Operating Systems", batch: "V SEM Sec B", teacherCodes: ["SNJ"] },
-  { code: "SE-B", name: "Software Engineering", batch: "V SEM Sec B", teacherCodes: ["KDP2"] },
-  { code: "FSD-B", name: "Full Stack Development", batch: "V SEM Sec B", teacherCodes: ["KM"] },
-  { code: "OOAD-B", name: "Object Oriented Analysis and Design", batch: "V SEM Sec B", teacherCodes: ["TAJ"] },
-  { code: "AI-LAB-B", name: "Artificial Intelligence Lab", batch: "V SEM Sec B", teacherCodes: ["JS", "SR"] },
-  { code: "OS-LAB-B", name: "Operating System Lab", batch: "V SEM Sec B", teacherCodes: ["SNJ"] },
-  { code: "FSD-LAB-B", name: "Full Stack Development Lab", batch: "V SEM Sec B", teacherCodes: ["KM", "TAJ"] },
-
-  // III SEM Sec A
-  { code: "ETCE-A", name: "Effective Technical Communication in English", batch: "III SEM Sec A", teacherCodes: ["CRP"] },
-  { code: "FA-A", name: "Finance and Accounting", batch: "III SEM Sec A", teacherCodes: ["NFA"] },
-  { code: "BE-A", name: "Basic Electronics", batch: "III SEM Sec A", teacherCodes: ["KKR"] },
-  { code: "DE-A", name: "Digital Electronics", batch: "III SEM Sec A", teacherCodes: ["NS"] },
-  { code: "DBS-A", name: "Database Systems", batch: "III SEM Sec A", teacherCodes: ["YS"] },
-  { code: "PP-A", name: "Python Programming", batch: "III SEM Sec A", teacherCodes: ["TVL2"] },
-  { code: "DM-A", name: "Discrete Mathematics", batch: "III SEM Sec A", teacherCodes: ["SR"] },
-  { code: "BE-LAB-A", name: "Basic Electronics Lab", batch: "III SEM Sec A", teacherCodes: ["KKR", "JS2"] }, 
-  { code: "PP-LAB-A", name: "Python Programming Lab", batch: "III SEM Sec A", teacherCodes: ["TVL2", "MSV"] },
-  { code: "DBS-LAB-A", name: "Database Systems Lab", batch: "III SEM Sec A", teacherCodes: ["YS", "AR", "JN"] },
-
-  // III SEM Sec B
-  { code: "ETCE-B", name: "Effective Technical Communication in English", batch: "III SEM Sec B", teacherCodes: ["KS"] },
-  { code: "FA-B", name: "Finance and Accounting", batch: "III SEM Sec B", teacherCodes: ["NFB"] },
-  { code: "BE-B", name: "Basic Electronics", batch: "III SEM Sec B", teacherCodes: ["PK"] },
-  { code: "DE-B", name: "Digital Electronics", batch: "III SEM Sec B", teacherCodes: ["MN"] },
-  { code: "DBS-B", name: "Database Systems", batch: "III SEM Sec B", teacherCodes: ["KM"] },
-  { code: "PP-B", name: "Python Programming", batch: "III SEM Sec B", teacherCodes: ["VG"] },
-  { code: "DM-B", name: "Discrete Mathematics", batch: "III SEM Sec B", teacherCodes: ["AR"] },
-  { code: "BE-LAB-B", name: "Basic Electronics Lab", batch: "III SEM Sec B", teacherCodes: ["PK", "ASKN"] },
-  { code: "PP-LAB-B", name: "Python Programming Lab", batch: "III SEM Sec B", teacherCodes: ["VG"] },
-  { code: "DBS-LAB-B", name: "Database Systems Lab", batch: "III SEM Sec B", teacherCodes: ["KM", "AR", "YS", "TVL2"] },
-];
+const COLLEGE_DATA = {
+  "college_name": "Matrusri Engineering College",
+  "code": "MEC-01",
+  "last_updated_date": "2026-03-30",
+  "departments": {
+    "Information Technology": {
+      "code": "IT",
+      "classes": [
+        {
+          "semester": "B.E IV SEM",
+          "section": "IT SEC-A",
+          "room_number": "N 304",
+          "class_teacher": "Ms. T. Vijaya Laxmi",
+          "effective_from": "23/02/2026",
+          "labs": ["JAVA LAB", "Microprocessor (MP) LAB", "Computer Networks (CN) LAB"],
+          "schedule": {
+            "MON": ["CN", "AT", "PS", "SS", "JAVA LAB(A)/MP LAB(B)"],
+            "TUE": ["COMP", "JAVA", "CN LAB(A)/JAVA LAB(B)", "PS", "LIB"],
+            "WED": ["AT", "PS", "SS", "CN", "JAVA", "COMP"],
+            "THU": ["JAVA", "AT", "SS", "COMP", "EITK", "LIB"],
+            "FRI": ["CN", "COMP", "AT", "JAVA", "SPORTS"],
+            "SAT": ["MP LAB(A)/CN LAB(B)", "SS", "CN", "EITK", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "PS": "Dr. D. Purna Chandar Rao",
+            "SS": "Mr. M. Thirupathi",
+            "CN": "Mrs. Y. Sirisha",
+            "JAVA": "Mrs. S. Ramya",
+            "COMP": "Dr. K. Durga Prasad",
+            "AT": "Mrs. K. Mounika",
+            "EITK": "Mr. M. Suresh Kumar"
+          }
+        },
+        {
+          "semester": "B.E IV SEM",
+          "section": "IT SEC-B",
+          "room_number": "N 314",
+          "class_teacher": "Mrs. K. Mounika",
+          "effective_from": "23/02/2026",
+          "labs": ["JAVA LAB", "Microprocessor (MP) LAB", "Computer Networks (CN) LAB"],
+          "schedule": {
+            "MON": ["JAVA", "COMP", "CN LAB(A)/JAVA LAB(B)", "PS", "CN"],
+            "TUE": ["AT", "EITK", "COMP", "SS", "MP LAB(A)/CN LAB(B)"],
+            "WED": ["CN", "JAVA", "PS", "SS", "AT", "LIB"],
+            "THU": ["COMP", "SS", "JAVA", "AT", "CN", "LIB"],
+            "FRI": ["AT", "JAVA", "CN", "SS", "PS", "SPORTS"],
+            "SAT": ["EITK", "PS", "JAVA LAB(A)/MP LAB(B)", "COMP", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "PS": "Mr. G. Shankar",
+            "SS": "Mrs. Narmada",
+            "CN": "Mrs. Y. Sirisha",
+            "JAVA": "Mrs. S. Ramya",
+            "COMP": "Dr. K. Durga Prasad",
+            "AT": "Mrs. K. Mounika",
+            "EITK": "Mr. K.N. Balaji Rao"
+          }
+        },
+        {
+          "semester": "B.E VI SEM",
+          "section": "IT SEC-A",
+          "room_number": "N 305",
+          "class_teacher": "Mr. A. Rajesh",
+          "effective_from": "23/02/2026",
+          "labs": ["ML LAB", "Embedded Systems (ES) LAB", "Mini Project-I LAB"],
+          "schedule": {
+            "MON": ["DM", "CC", "ML", "DAA", "ES", "LIB"],
+            "TUE": ["CRT (All Day)"],
+            "WED": ["ML LAB(A)/MINI PROJECT-I LAB(B)", "CC", "DAA", "NSC", "LIB"],
+            "THU": ["ES", "DAA", "NSC", "LIB", "MINI PROJECT-I LAB(A)/ES LAB(B)"],
+            "FRI": ["ML", "CC", "NSC", "DM", "ES LAB(A)/ML LAB(B)"],
+            "SAT": ["DM", "ES", "ML", "LIB", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "ES": "Mr. A. Rajesh",
+            "DAA": "Dr. J. Srinivas",
+            "ML": "Mrs. T. Aruna Jyothi",
+            "NSC": "Mrs. M. Srividya",
+            "CC": "Mrs. S. Nagajyothi",
+            "DM": "Ms. K. Smitha"
+          }
+        },
+        {
+          "semester": "B.E VI SEM",
+          "section": "IT SEC-B",
+          "room_number": "N 313",
+          "class_teacher": "Mrs. S. Nagajyothi",
+          "effective_from": "23/02/2026",
+          "labs": ["ML LAB", "Embedded Systems (ES) LAB", "Mini Project-I LAB"],
+          "schedule": {
+            "MON": ["ML", "DAA", "NSC", "DM", "CC", "ES"],
+            "TUE": ["CRT (All Day)"],
+            "WED": ["CC", "DAA", "NSC", "ES", "ES LAB(A)/MINI PROJECT-I LAB(B)"],
+            "THU": ["CC", "ML", "MINI PROJECT-I LAB(A)/ML LAB(B)", "DM", "LIB"],
+            "FRI": ["ES", "DM", "ML LAB(A)/ES LAB(B)", "LIB", "SPORTS"],
+            "SAT": ["ML", "DAA", "NSC", "LIB", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "ES": "Mr. A. Rajesh",
+            "DAA": "Dr. J. Srinivas",
+            "ML": "Mrs. T. Aruna Jyothi",
+            "NSC": "Mrs. M. Srividya",
+            "CC": "Mrs. S. Nagajyothi",
+            "DM": "Dr. P. Bharath Kumar"
+          }
+        },
+        {
+          "semester": "B.E VIII SEM",
+          "section": "IT",
+          "room_number": "N 404",
+          "class_teacher": "Mrs. S. Ramya",
+          "effective_from": "09/02/2026",
+          "labs": ["Project Work-II"],
+          "schedule": {
+            "MON": ["IS", "IS", "Project Work-II"],
+            "TUE": ["ERSE", "IS", "Project Work-II"],
+            "WED": ["Project Work-II", "ERSE", "ERSE", "Project Work-II"],
+            "THU": ["Project Work-II", "LIB", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "IS": "Ms. T. Vijaya Laxmi",
+            "ERSE": "Mrs. B. Prathyusha",
+            "PW-II": ["Mrs. S. Nagajyothi", "Mrs. T. Aruna Jyothi"]
+          }
+        }
+      ]
+    },
+    "Computer Engineering": {
+      "code": "CME",
+      "classes": [
+        {
+          "semester": "B.E IV SEM",
+          "section": "CME",
+          "room_number": "O 203",
+          "class_teacher": "Dr. K. Durga Prasad",
+          "effective_from": "23/02/2026",
+          "labs": ["Operating Systems (OS) LAB", "JAVA LAB", "DBMS LAB"],
+          "schedule": {
+            "MON": ["SS", "SS", "EITK", "DBMS", "P&S", "LIB"],
+            "TUE": ["P&S", "SS", "EITK", "OS", "LIB"],
+            "WED": ["JAVA", "JAVA", "OS LAB(A)/JAVA LAB(B)", "DBMS", "LIB"],
+            "THU": ["DBMS", "JAVA", "ETCE", "OS", "P&S", "SPORTS"],
+            "FRI": ["JAVA LAB(A)/DBMS LAB(B)", "P&S", "ETCE", "DBMS", "OS"],
+            "SAT": ["DBMS LAB(A)/OS LAB(B)", "SS", "JAVA", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "ETCE": "Mr. K. Prashanth",
+            "P&S": "Ms. M. Swathi Devi",
+            "SS": "Mrs. Narmada",
+            "OS": "Dr. J. Srinivas",
+            "JAVA": "Mr. K. Vikram Reddy",
+            "DBMS": "Mrs. B. J. Praveena"
+          }
+        },
+        {
+          "semester": "B.E VI SEM",
+          "section": "CME",
+          "room_number": "O 204",
+          "class_teacher": "Mrs. T. Aruna Jyothi",
+          "effective_from": "23/02/2026",
+          "labs": ["NLP LAB", "Web Technologies (WT) LAB", "Data Science (DS) LAB"],
+          "schedule": {
+            "MON": ["WT LAB(A)/NLP LAB(B)", "DM", "DS", "BCT", "LIB"],
+            "TUE": ["IOT", "NLP", "CC", "BCT", "NLP LAB(A)/DS LAB(B)"],
+            "WED": ["BCT", "DM", "NLP", "DS", "IOT", "LIB"],
+            "THU": ["CRT (All Day)"],
+            "FRI": ["NLP", "DM", "IOT", "CC", "SPORTS"],
+            "SAT": ["DS LAB(A)/WT LAB(B)", "DS", "CC", "LIB", "SPORTS"]
+          },
+          "faculty_mapping": {
+            "NLP": "Ms. J. Nagalaxmi",
+            "IOT": "Ms. Mizna",
+            "DS": "Ms. T. Vijaya Laxmi",
+            "CC": "Mrs. S. Nagajyothi",
+            "BCT": "Mrs. B. J. Praveena",
+            "DM": "Ms. M. Pratibha"
+          }
+        },
+        {
+          "semester": "B.E VIII SEM",
+          "section": "CME",
+          "room_number": "O 202",
+          "class_teacher": "Mr. K. Vikram Reddy",
+          "effective_from": "09/02/2026",
+          "labs": ["Project Work-II"],
+          "schedule": {
+            "MON": ["ERSE", "ERSE", "Project Work-II"],
+            "TUE": ["ERSE", "CC", "Project Work-II"],
+            "WED": ["Project Work-II", "CC", "CC", "Project Work-II"]
+          },
+          "faculty_mapping": {
+            "CC": "Ms. Mizna",
+            "ERSE": "Mr. T. Rajaramana",
+            "PW-II": "Mrs. B. J. Praveena"
+          }
+        }
+      ]
+    }
+  }
+};
 
 async function seed() {
   try {
     await mongoose.connect(MONGODB_URI);
     console.log("Connected to MongoDB");
 
-    // Clear existing data
-    await Teacher.deleteMany({});
-    await Batch.deleteMany({});
-    await Course.deleteMany({});
-    await Room.deleteMany({});
-    console.log("Cleared existing data");
+    console.log("Running comprehensive seed for Matrusri Engineering College...");
 
-    // Seed Rooms
-    await Room.insertMany(roomData);
-    console.log("Seeded Rooms");
+    // 1. Institution
+    let institution = await Institution.findOneAndUpdate(
+      { code: COLLEGE_DATA.code },
+      { name: COLLEGE_DATA.college_name, address: "Saidabad, Hyderabad" },
+      { upsert: true, new: true }
+    );
+    const instId = institution._id;
+    console.log("✅ Institution synchronized");
 
-    // Seed Teachers
-    const teachers = facultyData.map(f => ({
-      name: f.name,
-      code: f.code,
-      department: f.dept,
-      designation: f.dept === "IT" ? "Assistant Professor" : "Lecturer"
-    }));
-    await Teacher.insertMany(teachers);
-    console.log("Seeded Faculty");
+    // 2. Departments
+    const deptMap: Record<string, any> = {};
+    for (const [name, data] of Object.entries(COLLEGE_DATA.departments)) {
+      const dept = await Department.findOneAndUpdate(
+        { code: (data as any).code, institutionId: instId },
+        { name, institutionId: instId },
+        { upsert: true, new: true }
+      );
+      deptMap[name] = dept;
+    }
+    console.log("✅ Departments synchronized");
 
-    // Seed Batches
-    await Batch.insertMany(batchData);
-    console.log("Seeded Batches");
+    // 3. Rooms & Faculty (Collect all unique from classes)
+    const uniqueRooms = new Set<string>();
+    const facultyToSeed: Record<string, { name: string, dept: string }> = {};
+    const subjectsToSeed: Record<string, { name: string, batchName: string, teachers: string[] }> = {};
 
-    // Seed Subjects
-    const subjects = subjectsData.map(s => {
-      const isLab = s.code.includes("LAB") || s.name.toLowerCase().includes("lab");
-      const isProject = s.code.includes("PW");
-      return {
-        ...s,
-        type: isProject ? "project" : (isLab ? "lab" : "lecture"),
-        sessionsPerWeek: isLab ? 1 : 3, // Labs once a week (2 periods), Theory 3 times
+    for (const departmentName of Object.keys(COLLEGE_DATA.departments)) {
+      const deptData = COLLEGE_DATA.departments[departmentName as keyof typeof COLLEGE_DATA.departments];
+      for (const cls of deptData.classes) {
+        if (cls.room_number) uniqueRooms.add(cls.room_number);
+        
+        // Faculty from mappings
+        for (const [abbr, facultyName] of Object.entries(cls.faculty_mapping)) {
+          const names = Array.isArray(facultyName) ? facultyName : [facultyName];
+          names.forEach(n => {
+             facultyToSeed[n] = { name: n, dept: departmentName };
+          });
+          
+          const uniqueBatchName = `${cls.section} ${cls.semester}`;
+          subjectsToSeed[`${uniqueBatchName}-${abbr}`] = {
+            name: abbr,
+            batchName: uniqueBatchName,
+            teachers: names
+          };
+        }
+      }
+    }
+
+    // Upsert Rooms
+    for (const roomName of Array.from(uniqueRooms)) {
+      await Room.updateOne(
+        { name: roomName, institutionId: instId },
+        { $set: { capacity: 70, type: "lecture" } },
+        { upsert: true }
+      );
+    }
+    console.log(`✅ ${uniqueRooms.size} Rooms synchronized`);
+
+    // Clean start for Teachers and secondary data for this institution
+    await Teacher.deleteMany({ institutionId: instId });
+    await Course.deleteMany({ institutionId: instId });
+    await Batch.deleteMany({ institutionId: instId });
+
+    // Upsert Teachers
+    const teacherCodeMap: Record<string, string> = {};
+    const usedCodes = new Set<string>();
+
+    for (const [fName, fData] of Object.entries(facultyToSeed)) {
+      // Improved code generation: Try to get 4 chars from last name, or first name
+      let baseCode = fName.split('.').pop()?.trim().substring(0, 4).toUpperCase() || fName.substring(0, 4).toUpperCase();
+      baseCode = baseCode.replace(/[^A-Z]/g, "X"); // Ensure A-Z
+      
+      let code = baseCode;
+      let counter = 1;
+      while (usedCodes.has(code)) {
+        code = baseCode.substring(0, 3) + counter;
+        counter++;
+      }
+      usedCodes.add(code);
+
+      const teacher = await Teacher.create({
+        name: fName,
+        institutionId: instId,
+        department: fData.dept,
+        code: code,
+        designation: "Assistant Professor"
+      });
+      teacherCodeMap[fName] = teacher.code;
+    }
+    console.log(`✅ ${Object.keys(facultyToSeed).length} Faculty members synchronized`);
+
+    // Upsert Batches
+    for (const departmentName of Object.keys(COLLEGE_DATA.departments)) {
+      const deptData = COLLEGE_DATA.departments[departmentName as keyof typeof COLLEGE_DATA.departments];
+      for (const cls of deptData.classes) {
+        const uniqueBatchName = `${cls.section} ${cls.semester}`;
+        await Batch.create({
+          name: uniqueBatchName,
+          institutionId: instId,
+          semester: cls.semester.split(' ').pop() || "4",
+          year: cls.semester.includes("IV") ? 2 : (cls.semester.includes("VI") ? 3 : 4),
+          room: cls.room_number,
+          classTeacher: cls.class_teacher,
+          effectiveDate: cls.effective_from.split('/').reverse().join('-'), // DD/MM/YYYY to YYYY-MM-DD
+        });
+      }
+    }
+    console.log("✅ Batches synchronized");
+
+    // Upsert Courses
+    const courseCodeLookup: Record<string, string> = {};
+    for (const [key, sData] of Object.entries(subjectsToSeed)) {
+      const isLab = sData.name.toLowerCase().includes("lab") || sData.name.includes("PROJECT");
+      const teacherCodes = sData.teachers.map(n => teacherCodeMap[n]);
+      const uniqueCode = `${sData.name}-${sData.batchName}`;
+      courseCodeLookup[key] = uniqueCode;
+
+      await Course.create({
+        code: uniqueCode,
+        name: sData.name,
+        batch: sData.batchName,
+        institutionId: instId,
+        type: isLab ? "lab" : "lecture",
+        teacherCodes: teacherCodes,
+        sessionsPerWeek: isLab ? 1 : 3,
         durationSlots: isLab ? 2 : 1,
         preferredRoomTypes: [isLab ? "lab" : "lecture"],
-        priority: "core"
-      };
-    });
-    await Course.insertMany(subjects);
-    console.log("Seeded Subjects");
+      });
+    }
+    console.log("✅ Courses synchronized");
 
-    console.log("Seeding complete!");
+    // 4. Construct Timetable Grid
+    const timetablesByBatch: Record<string, any> = {};
+    const dayList = ["MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+    for (const departmentName of Object.keys(COLLEGE_DATA.departments)) {
+      const deptData = COLLEGE_DATA.departments[departmentName as keyof typeof COLLEGE_DATA.departments];
+      for (const cls of deptData.classes) {
+        const uniqueBatchName = `${cls.section} ${cls.semester}`;
+        const schedule: Record<string, (any | null)[]> = {
+          "MON": Array(7).fill(null),
+          "TUE": Array(7).fill(null),
+          "WED": Array(7).fill(null),
+          "THU": Array(7).fill(null),
+          "FRI": Array(7).fill(null),
+          "SAT": Array(7).fill(null),
+        };
+
+        for (const day of dayList) {
+          const jsonDaySchedule = (cls.schedule as any)[day] || [];
+          
+          if (jsonDaySchedule[0] === "CRT (All Day)") {
+            for (let i = 0; i < 7; i++) {
+              if (i === 4) schedule[day][i] = "LUNCH";
+              else schedule[day][i] = { subject: "CRT", room: cls.room_number, span: 1 };
+            }
+            continue;
+          }
+
+          let pIdx = 0;
+          for (const item of jsonDaySchedule) {
+            if (pIdx === 4) pIdx++; // Skip lunch
+            if (pIdx >= 7) break;
+
+            const isDouble = item.includes("LAB") || item.includes("PROJECT");
+            const lookupKey = `${uniqueBatchName}-${item}`;
+            const finalCode = courseCodeLookup[lookupKey] || item;
+
+            schedule[day][pIdx] = { 
+              subject: finalCode, 
+              room: isDouble ? "LAB" : cls.room_number, 
+              span: 1 
+            };
+            pIdx++;
+          }
+          schedule[day][4] = "LUNCH";
+        }
+
+        const faculty_mapping: any[] = [];
+        for (const [abbr, facultyName] of Object.entries(cls.faculty_mapping)) {
+          const lookupKey = `${uniqueBatchName}-${abbr}`;
+          const finalCode = courseCodeLookup[lookupKey] || abbr;
+
+          faculty_mapping.push({
+            code: finalCode,
+            subject: abbr,
+            abbr: abbr,
+            faculty: Array.isArray(facultyName) ? facultyName.join(", ") : facultyName
+          });
+        }
+
+        timetablesByBatch[uniqueBatchName] = {
+          id: uniqueBatchName.toLowerCase().replace(/\s+/g, "-"),
+          class: uniqueBatchName,
+          room: cls.room_number,
+          date: new Date().toLocaleDateString("en-GB"),
+          wef: cls.effective_from,
+          classTeacher: cls.class_teacher,
+          schedule: schedule,
+          faculty_mapping: faculty_mapping
+        };
+      }
+    }
+
+    // 5. Save the Timetable
+    await Timetable.deleteMany({ institutionId: instId }); // Clean slate for this institution
+    const finalTimetable = new Timetable({
+      courses: await Course.find({ institutionId: instId }),
+      teachers: await Teacher.find({ institutionId: instId }),
+      rooms: await Room.find({ institutionId: instId }),
+      grid: timetablesByBatch,
+      metrics: { conflicts: 0, gapScore: 100, balanceScore: 100, softScore: 100 },
+      workload: [],
+      institutionId: instId
+    });
+
+    await finalTimetable.save();
+    console.log("✅ Timetable Grid synchronized");
+
+    console.log("\n🚀 SEEDING COMPLETE!");
+    console.log("Please restart your server and select 'Matrusri Engineering College' in the app.");
     process.exit(0);
   } catch (err) {
-    console.error("Seeding failed:", err);
+    console.error("❌ Seeding failed:", err);
     process.exit(1);
   }
 }

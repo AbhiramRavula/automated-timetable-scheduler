@@ -103,9 +103,6 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl overflow-hidden relative">
-           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-              <span className="text-9xl">📅</span>
-           </div>
           <h2 className="text-xl font-bold text-slate-50 mb-6">Profile Resources</h2>
           <div className="space-y-3 relative z-10">
             {batches.length > 0 ? batches.slice(0, 5).map((batch: any) => (
@@ -132,7 +129,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
 
         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
           <h2 className="text-xl font-bold text-slate-50 mb-6">Platform Actions</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <button 
               onClick={() => onNavigate("timetables")}
               className="p-6 bg-blue-600/10 hover:bg-blue-600/20 rounded-xl text-left transition-all border border-blue-500/20 group"
@@ -149,15 +146,6 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
               <span className="text-3xl block mb-4 group-hover:scale-110 transition-transform origin-left">⚡</span>
               <p className="font-bold text-green-400 mb-1">AI Generator</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-widest">Build new schedules</p>
-            </button>
-
-            <button 
-              onClick={() => onNavigate("ai-assistant")}
-              className="p-6 bg-purple-600/10 hover:bg-purple-600/20 rounded-xl text-left transition-all border border-purple-500/20 group"
-            >
-              <span className="text-3xl block mb-4 group-hover:scale-110 transition-transform origin-left">✨</span>
-              <p className="font-bold text-purple-400 mb-1">Optimizer</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest">Constraint checks</p>
             </button>
 
             <button 

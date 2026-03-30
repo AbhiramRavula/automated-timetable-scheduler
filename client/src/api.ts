@@ -23,7 +23,7 @@ export interface TimetableGenerateResponse {
   workload?: any[];
 }
 
-const API_BASE_URL = "http://localhost:4000/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
 // Helper to get headers with institution ID
 function getHeaders(extraHeaders: Record<string, string> = {}): Record<string, string> {

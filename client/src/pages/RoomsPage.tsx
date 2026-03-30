@@ -31,7 +31,12 @@ export function RoomsPage() {
     setLoading(true);
     try {
       const data = await getRooms();
-      setRooms(data);
+      const enriched = data.map((room) =>
+        room.type === 'lab' && (!room.tags || room.tags.length === 0)
+          ? { ...room, tags: ['Shared-Lab'] }
+          : room
+      );
+      setRooms(enriched);
     } catch (err) {
       console.error("Failed to load rooms", err);
     } finally {

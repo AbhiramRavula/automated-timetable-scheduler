@@ -111,9 +111,6 @@ export function GeneratePage() {
       </div>
 
       <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 space-y-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-           <span className="text-9xl font-black">AI</span>
-        </div>
 
         <div>
           <label className="block text-xs font-black text-slate-500 uppercase tracking-[0.2em] mb-3">
