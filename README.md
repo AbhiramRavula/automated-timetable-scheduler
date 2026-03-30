@@ -1,5 +1,6 @@
 # 📚 Automated Timetable Scheduler (Research Edition)
 
+
 [![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/AbhiramRavula/automated-timetable-scheduler)
 [![Tech Stack](https://img.shields.io/badge/stack-MERN+LLM-green.svg)](https://github.com/AbhiramRavula/automated-timetable-scheduler)
 
