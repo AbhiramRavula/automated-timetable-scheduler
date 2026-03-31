@@ -44,6 +44,8 @@ router.post("/generate", async (req: RequestWithInstitution, res: Response) => {
         throw err;
       }
     }
+    
+    if (constraintsText) constraints.push({ name: constraintsText });
 
     console.log("🤖 Proposing schedule...");
     let rawSchedule: any[] = [];

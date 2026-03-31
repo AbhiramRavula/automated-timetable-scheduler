@@ -89,7 +89,8 @@ class ConflictMatrix {
 
 // Updated HardConstraints to use the matrix for speed
 class HardConstraints {
-  static validate(matrix: ConflictMatrix, newEvent: ScheduleEvent): boolean {
+  static validate(matrix: ConflictMatrix, newEvent: ScheduleEvent, blockedSlots?: Set<string>): boolean {
+    if (blockedSlots && blockedSlots.has(`${newEvent.day}-${newEvent.slot}`)) return false;
     return !matrix.isConflict(newEvent);
   }
 
@@ -152,7 +153,7 @@ class SoftConstraints {
 
 // N-1 Operator: Move a single event to a different time slot
 class N1Operator {
-  static apply(matrix: ConflictMatrix, events: ScheduleEvent[], rooms: Room[]): ScheduleEvent[] | null {
+  static apply(matrix: ConflictMatrix, events: ScheduleEvent[], rooms: Room[], blockedSlots: Set<string>): ScheduleEvent[] | null {
     if (events.length === 0) return null;
 
     const eventIndex = Math.floor(Math.random() * events.length);
@@ -168,7 +169,7 @@ class N1Operator {
 
       const newEvent = { ...eventToMove, day, slot };
 
-      if (HardConstraints.validate(matrix, newEvent)) {
+      if (HardConstraints.validate(matrix, newEvent, blockedSlots)) {
         matrix.add(newEvent); // Add new position to matrix
         const newSchedule = [...events];
         newSchedule[eventIndex] = newEvent;
@@ -183,7 +184,7 @@ class N1Operator {
 
 // N-2 Operator: Swap two events
 class N2Operator {
-  static apply(matrix: ConflictMatrix, events: ScheduleEvent[]): ScheduleEvent[] | null {
+  static apply(matrix: ConflictMatrix, events: ScheduleEvent[], blockedSlots: Set<string>): ScheduleEvent[] | null {
     if (events.length < 2) return null;
 
     const idx1 = Math.floor(Math.random() * events.length);
@@ -200,9 +201,9 @@ class N2Operator {
     const swappedE1 = { ...e1, day: e2.day, slot: e2.slot };
     const swappedE2 = { ...e2, day: e1.day, slot: e1.slot };
 
-    if (HardConstraints.validate(matrix, swappedE1)) {
+    if (HardConstraints.validate(matrix, swappedE1, blockedSlots)) {
         matrix.add(swappedE1);
-        if (HardConstraints.validate(matrix, swappedE2)) {
+        if (HardConstraints.validate(matrix, swappedE2, blockedSlots)) {
             matrix.add(swappedE2);
             const newSchedule = [...events];
             newSchedule[idx1] = swappedE1;
@@ -225,14 +226,15 @@ export class TimetableScheduler {
   private rooms: Room[];
   private maxIterations: number;
   private matrix: ConflictMatrix = new ConflictMatrix();
+  private blockedSlots = new Set<string>(); // "day-slot" e.g. "5-0" for Saturday slot 0
 
   constructor(
     courses: Course[],
     teachers: Teacher[],
     rooms: Room[],
+    constraints: any[] = [],
     maxIterations: number = 1000
   ) {
-    // Normalize teacher codes - some might have teacherCode (string) while others have teacherCodes (array)
     this.courses = courses.map(c => ({
       ...c,
       teacherCodes: Array.isArray(c.teacherCodes) && c.teacherCodes.length > 0 
@@ -242,6 +244,41 @@ export class TimetableScheduler {
     this.teachers = teachers;
     this.rooms = rooms;
     this.maxIterations = maxIterations;
+    this.parseConstraints(constraints);
+  }
+
+  // Parse custom constraints into blockedSlots
+  private parseConstraints(constraints: any[]) {
+    // 0: Mon, 1: Tue, ..., 5: Sat
+    const dayKeywords = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    
+    constraints.forEach(c => {
+      const text = (c.name || JSON.stringify(c)).toLowerCase();
+      
+      // Look for day-level holidays/off-days
+      dayKeywords.forEach((dayName, index) => {
+        if (text.includes(dayName) && (text.includes("holiday") || text.includes("off") || text.includes("unavailable"))) {
+          console.log(`🔒 Blocking all slots for ${dayName} (Day ${index}) based on constraint`);
+          for (let slot = 0; slot < 7; slot++) {
+            this.blockedSlots.add(`${index}-${slot}`);
+          }
+        }
+      });
+
+      // Look for specific slot-level blocks (e.g., "no classes after slot 3")
+      if (text.includes("after slot")) {
+        const match = text.match(/after slot (\d+)/);
+        if (match) {
+          const limit = parseInt(match[1]);
+          console.log(`🔒 Blocking all slots after slot ${limit}`);
+          for (let day = 0; day < 6; day++) {
+            for (let slot = limit + 1; slot < 7; slot++) {
+              this.blockedSlots.add(`${day}-${slot}`);
+            }
+          }
+        }
+      }
+    });
   }
 
   // Generate initial feasible solution using round-robin approach for variety
@@ -300,7 +337,7 @@ export class TimetableScheduler {
           isProject: course.type === "project"
         };
 
-        if (HardConstraints.validate(this.matrix, newEvent)) {
+        if (HardConstraints.validate(this.matrix, newEvent, this.blockedSlots)) {
           events.push(newEvent);
           this.matrix.add(newEvent);
           sessionPool.shift();
@@ -335,9 +372,9 @@ export class TimetableScheduler {
     for (let iteration = 0; iteration < this.maxIterations && temperature > minTemperature; iteration++) {
       let newSchedule: ScheduleEvent[] | null = null;
       if (Math.random() < 0.5) {
-        newSchedule = N1Operator.apply(this.matrix, currentSchedule, this.rooms);
+        newSchedule = N1Operator.apply(this.matrix, currentSchedule, this.rooms, this.blockedSlots);
       } else {
-        newSchedule = N2Operator.apply(this.matrix, currentSchedule);
+        newSchedule = N2Operator.apply(this.matrix, currentSchedule, this.blockedSlots);
       }
 
       if (newSchedule) {
@@ -444,7 +481,10 @@ export class TimetableScheduler {
             slot >= e.slot && slot < e.slot + e.duration
           );
 
-          if (!isBusy) {
+          // Check if slot is blocked by custom constraint
+          const isBlocked = this.blockedSlots.has(`${day}-${slot}`);
+
+          if (!isBusy && !isBlocked) {
             // Fill with Library or Sports
             // Rules: 
             // 1. Sports only in afternoon (slot 5, 6)

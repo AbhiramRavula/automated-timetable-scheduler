@@ -128,8 +128,17 @@ CRITICAL:
    - "LIB" and "SPORTS" combined MUST NOT exceed 4 periods a day.
    - "LIB" alone MUST NOT exceed 2 periods a day.
    - "SPORTS" alone MUST NOT exceed 2 periods a day.
-10. AT LEAST TWO (2) core academic subjects MUST be scheduled every day from Monday to Saturday. DO NOT leave Saturday or any other day entirely empty of core academic sessions.
-11. DO NOT exceed 2 periods per day for "LIB" and 2 periods per day for "SPORTS".
+10. USER-SPECIFIED CONSTRAINTS: 
+    - ${input.constraints && input.constraints.length > 0 
+        ? JSON.stringify(input.constraints, null, 2) 
+        : "NONE"}
+    - THESE RULES OR CONSTRAINTS ARE ABSOLUTE LAWS (HARD CONSTRAINTS). 
+    - DO NOT VIOLATE THEM UNDER ANY CIRCUMSTANCES.
+    - IF A DAY IS MARKED AS A HOLIDAY OR UNAVAILABLE, DO NOT SCHEDULE ANYTHING THERE.
+
+11. FILL ALL REMAINING GAPS with "LIB" (Library) or "SPORTS" based on the constraints above. 
+    - CRITICAL: DO NOT fill gaps with LIB or SPORTS on days or slots marked as HOLIDAYS, UNAVAILABLE, or BLOCKED in the user constraints.
+    - HOLIDAYS (Day-level) must be ENTIRELY EMPTY. No Academic subjects, No LIB, No SPORTS.
 `;
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
@@ -150,6 +159,7 @@ function simpleScheduler(input: {
   courses: any[];
   teachers: any[];
   rooms: any[];
+  constraints?: any[];
   batches?: any[];
 }): GeneratedEvent[] {
   // Import the advanced scheduler
@@ -163,6 +173,7 @@ function simpleScheduler(input: {
       input.courses,
       input.teachers,
       input.rooms,
+      input.constraints || [],
       500 // Max iterations for optimization
     );
     

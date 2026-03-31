@@ -84,6 +84,7 @@ interface Generation {
   workload?: any[];
   department?: string;
   academic_year?: string;
+  customConstraint?: string;
 }
 
 export function TimetablesPage() {
@@ -110,6 +111,9 @@ export function TimetablesPage() {
         const gens: Generation[] = data.map((doc: any, idx: number) => {
           const tts = normaliseDoc(doc);
           const isSeeded = doc.grid?.source === "seed";
+          const rawConstraintObj = (doc.constraintsSnapshot || []).find((c: any) => !c.type && c.name);
+          const customConstraint = rawConstraintObj ? rawConstraintObj.name : undefined;
+          
           return {
             id: doc._id || String(idx),
             label: doc.label || (isSeeded ? "📋 Current Production Schedule" : `🤖 AI Synthesis #${data.length - idx}`),
@@ -119,6 +123,7 @@ export function TimetablesPage() {
             workload: doc.workload || [],
             department: doc.grid?.department,
             academic_year: doc.grid?.academic_year,
+            customConstraint,
           };
         });
         setGenerations(gens);
@@ -219,6 +224,11 @@ export function TimetablesPage() {
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{gen.createdAt}</span>
                       {gen.department && (
                         <span className="text-[10px] font-black text-blue-500/50 uppercase tracking-tighter px-2 border-l border-slate-800">{gen.department}</span>
+                      )}
+                      {gen.customConstraint && (
+                        <span className="text-[10px] font-black text-amber-500/80 uppercase tracking-tighter px-2 border-l border-slate-800">
+                           Rule: {gen.customConstraint.length > 40 ? gen.customConstraint.substring(0, 40) + '...' : gen.customConstraint}
+                        </span>
                       )}
                     </div>
                   </div>
