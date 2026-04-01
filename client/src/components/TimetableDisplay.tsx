@@ -97,6 +97,17 @@ function mergeRow(cells: (any | null)[]): { value: any; span: number; index: num
       }
     }
     
+    // ENSURE SPAN DOES NOT CROSS LUNCH OR OVERFLOW THE GRID!
+    // Since beforeLunch takes indices < 4, a cell at i < 4 cannot span past 3.
+    // So span must not exceed (4 - i).
+    if (i < 4 && i + span > 4) {
+      span = 4 - i;
+    }
+    // Similarly, a cell at i >= 5 cannot span past 6 (total length 7).
+    if (i >= 5 && i + span > 7) {
+      span = 7 - i;
+    }
+    
     merged.push({ value: cell, span, index: i });
     i += span;
   }
@@ -111,7 +122,12 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
   const [schedule, setSchedule] = useState<Record<string, (any | null)[]>>(() => {
     const flat: Record<string, (any | null)[]> = {};
     Object.entries(timetable.schedule || {}).forEach(([day, cells]) => {
-      flat[day] = (cells as any[]).map((c) =>
+      // Force exactly 7 slots to prevent extra columns from hallucinated AI data
+      const safeCells = [...(cells as any[])];
+      while (safeCells.length < 7) safeCells.push(null);
+      safeCells.length = 7; 
+      
+      flat[day] = safeCells.map((c) =>
         c == null ? null : c
       );
     });
@@ -211,10 +227,14 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
         <table className="w-full border-collapse border-2 border-black mb-3">
           <thead>
             <tr className="bg-gray-200">
-              <th className="border-2 border-black px-2 py-1.5 text-xs">TIME<br />DAY</th>
+              <th className="border-2 border-black px-2 py-1.5 text-xs w-20">TIME<br />DAY</th>
               {timeSlots.map((slot, idx) => (
-                <th key={idx} className="border-2 border-black px-1 py-1 text-xs leading-tight">
-                  {slot.startTime}<br />to<br />{slot.endTime}
+                <th key={idx} className={`border-2 border-black px-1 py-1 text-xs leading-tight ${idx === 4 ? 'w-10' : 'w-24'}`}>
+                  {slot.name === "LUNCH" ? (
+                    <span className="tracking-widest font-black">LUNCH BREAK<br/><span className="font-medium text-[10px]">{slot.startTime}-{slot.endTime}</span></span>
+                  ) : (
+                    <span className="whitespace-nowrap">{slot.startTime} - {slot.endTime}</span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -258,8 +278,8 @@ export function TimetableDisplay({ timetable, subjects, timeSlots, onCellEdit }:
                   {dayIdx === 0 ? (
                     <td
                       rowSpan={activeDays.length}
-                      className="lunch-cell border-2 border-black text-center font-bold align-middle"
-                      style={{ writingMode: "vertical-rl", letterSpacing: 3 }}
+                      className="lunch-cell border-2 border-black text-center font-black align-middle text-gray-400 bg-gray-50/50"
+                      style={{ writingMode: "vertical-rl", letterSpacing: 4 }}
                     >
                       LUNCH
                     </td>

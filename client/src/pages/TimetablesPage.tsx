@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { realMockData } from "../realMockData";
+
 import { TimetableDisplay } from "../components/TimetableDisplay";
 import { getTimetables, deleteTimetable } from "../api";
 import { useInstitution } from "../context/InstitutionContext";
@@ -226,8 +226,8 @@ export function TimetablesPage() {
                         <span className="text-[10px] font-black text-blue-500/50 uppercase tracking-tighter px-2 border-l border-slate-800">{gen.department}</span>
                       )}
                       {gen.customConstraint && (
-                        <span className="text-[10px] font-black text-amber-500/80 uppercase tracking-tighter px-2 border-l border-slate-800">
-                           Rule: {gen.customConstraint.length > 40 ? gen.customConstraint.substring(0, 40) + '...' : gen.customConstraint}
+                        <span className="text-[10px] font-black text-amber-500/80 uppercase tracking-tighter px-2 border-l border-slate-800" title={gen.customConstraint}>
+                           Rule: {gen.customConstraint.length > 80 ? gen.customConstraint.substring(0, 80) + '...' : gen.customConstraint}
                         </span>
                       )}
                     </div>
