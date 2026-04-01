@@ -97,6 +97,7 @@ function AppContent() {
                 {navItems.map((item) => (
                   <button
                     key={item.id}
+                    title={item.label}
                     onClick={() => setCurrentPage(item.id)}
                     className={`px-3 py-2 rounded-lg transition-all flex items-center gap-2 text-xs font-bold uppercase tracking-wide group ${
                       currentPage === item.id
