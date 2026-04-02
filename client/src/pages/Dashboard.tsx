@@ -192,6 +192,16 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: any) => void }) {
           </div>
         </div>
       </div>
+
+      <div className="pt-6 border-t border-slate-800 text-center">
+        <button 
+          onClick={() => onNavigate("about")}
+          className="group inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-300 transition-colors uppercase tracking-widest"
+        >
+          <span>🤔 How does this work?</span>
+          <span className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-blue-400">→</span>
+        </button>
+      </div>
     </div>
   );
 }

@@ -8,9 +8,10 @@ import { TimetablesPage } from "./pages/TimetablesPage";
 import { GeneratePage } from "./pages/GeneratePage";
 import { SubjectsPage } from "./pages/SubjectsPage";
 import { ProfilesPage } from "./pages/ProfilesPage";
+import { AboutPage } from "./pages/AboutPage";
 import { InstitutionProvider, useInstitution } from "./context/InstitutionContext";
 
-type Page = "dashboard" | "faculty" | "subjects" | "rooms" | "classes" | "timetables" | "ai-assistant" | "generate" | "profiles";
+type Page = "dashboard" | "faculty" | "subjects" | "rooms" | "classes" | "timetables" | "ai-assistant" | "generate" | "profiles" | "about";
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
@@ -48,6 +49,8 @@ function AppContent() {
         return <TimetablesPage />;
       case "profiles":
         return <ProfilesPage />;
+      case "about":
+        return <AboutPage />;
       default:
         return <Dashboard onNavigate={(page: Page) => setCurrentPage(page)} />;
     }
