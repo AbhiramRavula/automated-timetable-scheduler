@@ -31,6 +31,23 @@ A high-performance, web-based platform for academic institutions to automate the
 - **AI**: Google Generative AI (Gemini 1.5 Flash).
 - **Database**: MongoDB (Atlas).
 
+## 📐 System Design (UML)
+
+### Collaboration Diagram
+Visualizes the flow of messages between system components during timetable generation.
+
+![Collaboration Diagram](docs/diagrams/collaboration_diagram.png)
+
+### Component Diagram
+Illustrates the structural relationship between software modules.
+
+![Component Diagram](docs/diagrams/component_diagram.png)
+
+### Deployment Diagram
+Shows the physical distribution of the application across cloud nodes.
+
+![Deployment Diagram](docs/diagrams/deployment_diagram.png)
+
 ## 🏁 Getting Started
 
 1.  **Clone & Install**:
