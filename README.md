@@ -15,6 +15,16 @@ A high-performance, web-based platform for academic institutions to automate the
 - **📊 Faculty Workload Insights**: Real-time aggregation of teaching hours and balanced distribution across departments.
 - **✨ Premium UI/UX**: Professional dashboard with dark-mode glassmorphism and interactive timetable grids.
 
+## ⚙️ How It Works
+
+The platform solves the complex University Course Timetabling Problem (UCTP) using a **three-phase hybrid architecture**:
+
+1.  **Data Input & Setup**: Administrators define the institution's metadata, including faculty profiles, subjects (lectures and labs), class batches, and physical rooms.
+2.  **Phase 1: Intelligent Initialization (LLM-Augmented)**: Natural language constraints (e.g., "Professor X only teaches in the morning") are processed by **Gemini 1.5 Flash**. The LLM translates these textual rules into structured parameters and proposes an initial, "warm start" feasible grid.
+3.  **Phase 2: Local Search Optimization (Simulated Annealing)**: The core metaheuristic optimization engine takes over. It rapidly explores alternative schedules using **N-1 (Move)** and **N-2 (Swap)** operators. Guided by a geometric cooling schedule, it iteratively minimizes soft constraint penalties (like gap and balance scores) while strictly adhering to hard constraints.
+4.  **Phase 3: Hardware Verification**: A specialized $O(1)$ `ConflictMatrix` handles collision detection in constant time. This allows the system to validate thousands of potential schedules per second, ensuring zero overlapping classes, mandatory lunch breaks, and correct lab equipment allocation.
+5.  **Output & Visualization**: The fully optimized timetable is finalized, filling empty slots with extracurriculars (Library/Sports), and presented on an interactive React dashboard.
+
 ## 📁 Repository Structure
 
 - `client/`: React/Vite/TypeScript frontend.
