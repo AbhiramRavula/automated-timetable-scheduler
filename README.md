@@ -1,6 +1,5 @@
 # 📚 Automated Timetable Scheduler (Research Edition)
 
-
 [![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/AbhiramRavula/automated-timetable-scheduler)
 [![Tech Stack](https://img.shields.io/badge/stack-MERN+LLM-green.svg)](https://github.com/AbhiramRavula/automated-timetable-scheduler)
 
@@ -41,19 +40,36 @@ The platform solves the complex University Course Timetabling Problem (UCTP) usi
 - **AI**: Google Generative AI (Gemini 1.5 Flash).
 - **Database**: MongoDB (Atlas).
 
+## 📸 Screenshots
+
+![Dashboard](./dashboard-screen.png)
+_Admin Dashboard Overview_
+
+![Generate Timetable](./generate-timetable-screen.png)
+_AI-Powered Timetable Generation Interface_
+
+![Timetable](./timetable.png)
+_Generated Interactive Timetable_
+
+![Classrooms](./Classrooms.png)
+_Classroom & Resources Management_
+
 ## 📐 System Design (UML)
 
 ### Collaboration Diagram
+
 Visualizes the flow of messages between system components during timetable generation.
 
 ![Collaboration Diagram](docs/diagrams/collaboration_diagram.png)
 
 ### Component Diagram
+
 Illustrates the structural relationship between software modules.
 
 ![Component Diagram](docs/diagrams/component_diagram.png)
 
 ### Deployment Diagram
+
 Shows the physical distribution of the application across cloud nodes.
 
 ![Deployment Diagram](docs/diagrams/deployment_diagram.png)
@@ -79,6 +95,7 @@ Shows the physical distribution of the application across cloud nodes.
 For full research details, please refer to the [RESEARCH_THESIS.md](./RESEARCH_THESIS.md).
 
 ---
+
 **Status:** ✅ Production Ready  
 **Institutional Partner:** Matrusri Engineering College  
-**Lead Architect:** Abhiram Ravula
+This is a part of Major project, final year IT 2022-26 batch
