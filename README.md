@@ -99,3 +99,10 @@ For full research details, please refer to the [RESEARCH_THESIS.md](./RESEARCH_T
 **Status:** ✅ Production Ready  
 **Institutional Partner:** Matrusri Engineering College  
 This is a part of Major project, final year IT 2022-26 batch
+
+---
+
+Team members:-
+Balguri Praveen
+Kunchala Anudeep
+Abhiram Ravula
