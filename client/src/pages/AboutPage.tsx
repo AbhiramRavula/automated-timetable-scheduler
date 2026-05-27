@@ -1,5 +1,4 @@
-import React from 'react';
-
+// 
 export function AboutPage() {
   return (
     <div className="max-w-4xl mx-auto space-y-10 pb-20">
